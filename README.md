@@ -1,6 +1,9 @@
 # MindUpload
 Concept, implementation and simulation of human mind uploading
 
+Run Simulation in web browser:
+https://asbest.github.io/MindUpload/simulation/index.html
+
 # Gradual Transition Framework
 
 ## Overview
