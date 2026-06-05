@@ -25,8 +25,10 @@ The project is structured as a modular transition engine. The architecture focus
 
 ## Simulation and Proof of Concept
 The included `transition_engine` serves as a technical simulation of this theory. It demonstrates:
-*   **Deterministic Transitions**: Automated state updates for each module based on defined requirements.
-*   **Integrity Monitoring**: Real-time tracking of "Continuity Integrity," proving that the system remains stable even as its underlying components are replaced.
+*   **Neuronal-Level Simulation**: Each module is composed of individual neuronal units with realistic membrane potential and firing dynamics.
+*   **Temporal Interactions**: Simulation of signal propagation and synaptic interactions between modules over time.
+*   **Deterministic Transitions**: Granular state updates for neuronal populations based on defined requirements.
+*   **Integrity Monitoring**: Real-time tracking of "Continuity Integrity" based on signal coherence between biological and synthetic populations, proving that the system remains stable even as its underlying components are replaced.
 *   **Validation Loops**: Verification protocols that ensure a transition only completes if the continuity between the old and new states is confirmed.
 
 ## Technical Stack
