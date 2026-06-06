@@ -173,6 +173,9 @@ class TransitionEngine {
         this.lastTick = performance.now();
         this.isRunning = true;
 
+        this.networkCanvas = document.getElementById('canvas-network');
+        this.networkCtx = this.networkCanvas ? this.networkCanvas.getContext('2d') : null;
+
         this.loop();
     }
 
@@ -243,7 +246,80 @@ class TransitionEngine {
         for (const type in this.modules) {
             this.modules[type].render();
         }
+        this.renderNetwork();
         this.updateUI();
+    }
+
+    renderNetwork() {
+        if (!this.networkCtx) return;
+        const ctx = this.networkCtx;
+        const w = this.networkCanvas.width;
+        const h = this.networkCanvas.height;
+
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, 0, w, h);
+
+        const modules = [
+            { type: ModuleType.SENSORY, x: 100 },
+            { type: ModuleType.COGNITIVE, x: 370 },
+            { type: ModuleType.KERNEL, x: 640 }
+        ];
+
+        // Draw connections
+        ctx.lineWidth = 2;
+        for (let i = 0; i < modules.length - 1; i++) {
+            const m1 = modules[i];
+            const m2 = modules[i+1];
+            const mod1 = this.modules[m1.type];
+
+            const gradient = ctx.createLinearGradient(m1.x, h/2, m2.x, h/2);
+            gradient.addColorStop(0, mod1.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41');
+            gradient.addColorStop(1, this.modules[m2.type].state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41');
+
+            ctx.strokeStyle = gradient;
+            ctx.setLineDash([5, 5]);
+            ctx.lineDashOffset = -performance.now() / 50;
+
+            ctx.beginPath();
+            ctx.moveTo(m1.x + 40, h/2);
+            ctx.lineTo(m2.x - 40, h/2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Signal pulse
+            const pulsePos = (performance.now() / 1000) % 1;
+            const px = m1.x + 40 + (m2.x - m1.x - 80) * pulsePos;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(px, h/2, 3 * (mod1.activity * 10 + 1), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw module nodes
+        modules.forEach(m => {
+            const mod = this.modules[m.type];
+            const synthRatio = mod.syntheticCount / 64;
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.strokeStyle = mod.state === State.BIOLOGICAL ? '#ffcc00' : (mod.state === State.HYBRID ? '#00ccff' : '#00ff41');
+            ctx.lineWidth = 3;
+
+            ctx.beginPath();
+            ctx.arc(m.x, h/2, 40, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Progress arc
+            ctx.strokeStyle = '#00ff41';
+            ctx.beginPath();
+            ctx.arc(m.x, h/2, 35, -Math.PI/2, -Math.PI/2 + (Math.PI * 2 * (mod.overallProgress / 100)));
+            ctx.stroke();
+
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.font = '10px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(m.type.split(' ')[0], m.x, h/2 + 5);
+        });
     }
 
     updateUI() {

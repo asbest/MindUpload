@@ -14,11 +14,14 @@ class SimulationDiagnostics {
         console.log("Starting System Diagnostics...");
 
         try {
+            this.engine.reset();
+            await new Promise(r => setTimeout(r, 200));
+
             this.testInitialState();
             await this.testIncrementalSubstitution();
-            this.testFullModuleTransition();
-            this.testTransitionOrder();
-            this.testResetFunctionality();
+            await this.testFullModuleTransition();
+            await this.testTransitionOrder();
+            await this.testResetFunctionality();
 
             console.log("Diagnostics Complete: All tests passed.");
             return { success: true, results: this.results };
