@@ -146,6 +146,62 @@ h1 {
     transition: width 0.5s ease-in-out;
 }
 
+.metrics-panel {
+    background-color: #000;
+    padding: 15px;
+    border: 1px solid #00ccff;
+    margin-bottom: 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.metric-item {
+    text-align: center;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.2rem;
+    color: #00ccff;
+    font-weight: bold;
+}
+
+.metric-label {
+    font-size: 0.7rem;
+    color: #888;
+    text-transform: uppercase;
+}
+
+.virtual-env {
+    background-color: #000;
+    border: 1px solid #333;
+    height: 100px;
+    margin-bottom: 30px;
+    position: relative;
+    overflow: hidden;
+}
+
+.env-label {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    font-size: 0.7rem;
+    color: #555;
+}
+
+#digital-limb {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #00ff41;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px #00ff41;
+}
+
 .controls {
     display: flex;
     justify-content: center;
@@ -328,6 +384,26 @@ button:disabled {
             </div>
         </div>
 
+        <div class="metrics-panel">
+            <div class="metric-item">
+                <span class="metric-label">Dataset Size</span>
+                <span id="metric-dataset" class="metric-value">0.00 ZB</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Neuron Scale</span>
+                <span id="metric-scale" class="metric-value">1:8.6M</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Compute Overhead</span>
+                <span id="metric-flops" class="metric-value">0.00 EFLOPS</span>
+            </div>
+        </div>
+
+        <div class="virtual-env">
+            <span class="env-label">Closed-Loop Virtual Environment (Motor Feedback)</span>
+            <div id="digital-limb"></div>
+        </div>
+
         <div class="network-overview">
             <h2>High-Level Connectome</h2>
             <canvas id="canvas-network" width="740" height="150"></canvas>
@@ -354,6 +430,14 @@ button:disabled {
                 <h3>Primary Kernel</h3>
                 <div class="status">State: <span class="state-label biological">Biological</span></div>
                 <canvas class="neuron-canvas" id="canvas-primary" width="200" height="100"></canvas>
+                <div class="progress-container">
+                    <div class="progress-bar-inner" style="width: 0%;"></div>
+                </div>
+            </div>
+            <div class="module" id="module-motor">
+                <h3>Motor Module</h3>
+                <div class="status">State: <span class="state-label biological">Biological</span></div>
+                <canvas class="neuron-canvas" id="canvas-motor" width="200" height="100"></canvas>
                 <div class="progress-container">
                     <div class="progress-bar-inner" style="width: 0%;"></div>
                 </div>
@@ -444,58 +528,74 @@ const State = {
 const ModuleType = {
     SENSORY: 'Sensory',
     COGNITIVE: 'Cognitive',
-    KERNEL: 'Primary Kernel'
+    KERNEL: 'Primary Kernel',
+    MOTOR: 'Motor'
 };
 
+const NeuronType = {
+    RS: 'Regular Spiking',
+    FS: 'Fast Spiking'
+};
+
+class Synapse {
+    constructor(from, to, weight, type, delay) {
+        this.from = from;
+        this.to = to;
+        this.weight = weight;
+        this.type = type; // "Glutamatergic" (Excitatory) or "GABAergic" (Inhibitory)
+        this.delay = delay; // in ms
+    }
+}
+
 class Neuron {
-    constructor(id, x = 0, y = 0) {
+    constructor(id, x = 0, y = 0, type = NeuronType.RS) {
         this.id = id;
         this.x = x;
         this.y = y;
+        this.type = type;
         this.state = State.BIOLOGICAL;
+        this.synapticInput = 0;
 
-        // Izhikevich Model Parameters
         // RS (Regular Spiking): a=0.02, b=0.2, c=-65, d=8
         // FS (Fast Spiking): a=0.1, b=0.2, c=-65, d=2
-        this.params = {
-            a: 0.02,
-            b: 0.2,
-            c: -65,
-            d: 8
-        };
+        this.params = this.getIzhikevichParams(type);
 
         this.v = -65; // Membrane potential
         this.u = this.params.b * this.v; // Recovery variable
         this.isFiring = false;
     }
 
-    update(dt, inputSignal = 0) {
-        // Limit dt and use smaller sub-steps for Izhikevich stability
-        const step = Math.min(dt, 20);
-        const subDt = 0.5;
-        const iterations = Math.ceil(step / subDt);
+    getIzhikevichParams(type) {
+        if (type === NeuronType.FS) {
+            return { a: 0.1, b: 0.2, c: -65, d: 2 };
+        }
+        return { a: 0.02, b: 0.2, c: -65, d: 8 };
+    }
 
-        let fired = false;
+    update(dt, externalCurrent = 0) {
+        // dt is expected to be subDt (e.g., 0.5ms) for mathematical stability
+
+        // Numerical stability: cap v to prevent runaway quadratic
+        const v = Math.min(this.v, 30);
 
         // Adaptive noise based on state
-        const noise = this.state === State.BIOLOGICAL ? (Math.random() - 0.5) * 10 : (Math.random() - 0.5) * 1;
-        const current = inputSignal + noise + 4; // Base drive
+        const noise = this.state === State.BIOLOGICAL ? (Math.random() - 0.5) * 5 : (Math.random() - 0.5) * 0.5;
 
-        for (let i = 0; i < iterations; i++) {
-            // Izhikevich equations
-            // v' = 0.04v^2 + 5v + 140 - u + I
-            // u' = a(bv - u)
+        // Total current I = synaptic inputs + external stimuli + base drive + noise
+        const I = this.synapticInput + externalCurrent + 4 + noise;
+        this.synapticInput = 0; // Clear after use
 
-            // Numerical stability: cap v to prevent runaway quadratic
-            const v = Math.min(this.v, 30);
-            this.v += subDt * (0.04 * v * v + 5 * v + 140 - this.u + current);
-            this.u += subDt * this.params.a * (this.params.b * this.v - this.u);
+        // v' = 0.04*v^2 + 5*v + 140 - u + I
+        this.v += dt * (0.04 * v * v + 5 * v + 140 - this.u + I);
 
-            if (this.v >= 30) {
-                fired = true;
-                this.v = this.params.c;
-                this.u += this.params.d;
-            }
+        // u' = a * (b * v - u)
+        this.u += dt * this.params.a * (this.params.b * this.v - this.u);
+
+        let fired = false;
+        if (this.v >= 30) {
+            fired = true;
+            this.v = this.params.c;
+            this.u += this.params.d;
         }
 
         this.isFiring = fired;
@@ -504,9 +604,9 @@ class Neuron {
 
     setSynthetic() {
         this.state = State.SYNTHETIC;
-        // Transition to Fast Spiking (FS) for efficiency/precision
-        this.params.a = 0.1;
-        this.params.d = 2;
+        // In this simulation, transition to FS parameters represents synthetic efficiency
+        this.type = NeuronType.FS;
+        this.params = this.getIzhikevichParams(this.type);
     }
 }
 
@@ -529,24 +629,30 @@ class TransitionModule {
         const w = this.canvas ? this.canvas.width : 200;
         const h = this.canvas ? this.canvas.height : 100;
 
-        // Create neurons in a semi-random spatial distribution
-        for (let i = 0; i < 64; i++) {
+        // Create neurons: 80% Excitatory (RS), 20% Inhibitory (FS)
+        const neuronCount = 64;
+        for (let i = 0; i < neuronCount; i++) {
             const margin = 10;
             const x = margin + Math.random() * (w - 2 * margin);
             const y = margin + Math.random() * (h - 2 * margin);
-            this.neurons.push(new Neuron(i, x, y));
+            const type = Math.random() < 0.8 ? NeuronType.RS : NeuronType.FS;
+            this.neurons.push(new Neuron(i, x, y, type));
         }
 
-        // Create synapses between nearby neurons
+        // Create internal synapses between nearby neurons
         for (let i = 0; i < this.neurons.length; i++) {
-            for (let j = i + 1; j < this.neurons.length; j++) {
+            for (let j = 0; j < this.neurons.length; j++) {
+                if (i === j) continue;
                 const n1 = this.neurons[i];
                 const n2 = this.neurons[j];
                 const dist = Math.hypot(n1.x - n2.x, n1.y - n2.y);
 
-                // Connect if within distance, limited number of connections
-                if (dist < 35 && Math.random() < 0.3) {
-                    this.synapses.push({ from: n1, to: n2, weight: Math.random() });
+                // Spatial connectivity: neurons connect to neighbors
+                if (dist < 40 && Math.random() < 0.2) {
+                    const weight = n1.type === NeuronType.RS ? Math.random() * 5 : Math.random() * -2;
+                    const type = n1.type === NeuronType.RS ? "Glutamatergic" : "GABAergic";
+                    const delay = 1 + Math.random() * 4; // 1-5ms delay
+                    this.synapses.push(new Synapse(n1, n2, weight, type, delay));
                 }
             }
         }
@@ -599,16 +705,18 @@ class TransitionModule {
             ctx.arc(n.x, n.y, 3, 0, Math.PI * 2);
 
             if (n.isFiring) {
-                ctx.fillStyle = n.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41';
+                ctx.fillStyle = n.state === State.BIOLOGICAL ? (n.type === NeuronType.RS ? '#ffcc00' : '#ff33ff') : '#00ff41';
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = ctx.fillStyle;
                 ctx.fill();
                 ctx.shadowBlur = 0;
             } else {
                 const p = Math.max(0, Math.min(1, (n.v + 65) / 95));
-                ctx.fillStyle = n.state === State.BIOLOGICAL ?
-                    `rgba(100, 80, 0, ${0.1 + p * 0.4})` :
-                    `rgba(0, 100, 40, ${0.1 + p * 0.4})`;
+                if (n.state === State.BIOLOGICAL) {
+                    ctx.fillStyle = n.type === NeuronType.RS ? `rgba(100, 80, 0, ${0.1 + p * 0.4})` : `rgba(100, 0, 100, ${0.1 + p * 0.4})`;
+                } else {
+                    ctx.fillStyle = `rgba(0, 100, 40, ${0.1 + p * 0.4})`;
+                }
                 ctx.fill();
             }
         });
@@ -638,10 +746,12 @@ class TransitionModule {
 
 class TransitionEngine {
     constructor() {
+        this.externalSensoryInput = 0;
         this.modules = {
             [ModuleType.SENSORY]: new TransitionModule(ModuleType.SENSORY),
             [ModuleType.COGNITIVE]: new TransitionModule(ModuleType.COGNITIVE),
-            [ModuleType.KERNEL]: new TransitionModule(ModuleType.KERNEL)
+            [ModuleType.KERNEL]: new TransitionModule(ModuleType.KERNEL),
+            [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
         };
         this.integrity = 100;
         this.activeReasons = new Set();
@@ -649,10 +759,54 @@ class TransitionEngine {
         this.lastTick = performance.now();
         this.isRunning = true;
 
+        // Global synaptic signal queue for handling delays
+        // Each entry: { deliveryTime, targetNeuron, weight }
+        this.signalQueue = [];
+        this.currentTime = 0; // Simulated time in ms
+
         this.networkCanvas = document.getElementById('canvas-network');
         this.networkCtx = this.networkCanvas ? this.networkCanvas.getContext('2d') : null;
 
+        this.establishInterModuleConnections();
+        this.initAfferentListeners();
         this.loop();
+    }
+
+    initAfferentListeners() {
+        // Afferent Input Layer: Map mouse Y position to sensory current
+        document.addEventListener('mousemove', (e) => {
+            const container = document.querySelector('.container');
+            const rect = container.getBoundingClientRect();
+            const normalizedY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            // Higher mouse position = more input current to sensory neurons
+            this.externalSensoryInput = (1 - normalizedY) * 20;
+        });
+    }
+
+    establishInterModuleConnections() {
+        // Connect Sensory -> Cognitive
+        this.connectModules(ModuleType.SENSORY, ModuleType.COGNITIVE, 0.4, 2.0);
+        // Connect Cognitive -> Kernel
+        this.connectModules(ModuleType.COGNITIVE, ModuleType.KERNEL, 0.4, 2.0);
+        // Connect Kernel -> Motor
+        this.connectModules(ModuleType.KERNEL, ModuleType.MOTOR, 0.4, 2.0);
+    }
+
+    connectModules(sourceType, targetType, probability, weightScale) {
+        const sourceNeurons = this.modules[sourceType].neurons;
+        const targetNeurons = this.modules[targetType].neurons;
+
+        sourceNeurons.forEach(s => {
+            if (s.type === NeuronType.RS) { // Only excitatory neurons project between modules for simplicity
+                targetNeurons.forEach(t => {
+                    if (Math.random() < probability) {
+                        const delay = 5 + Math.random() * 10; // Inter-module delay 5-15ms
+                        const weight = Math.random() * weightScale;
+                        this.modules[sourceType].synapses.push(new Synapse(s, t, weight, "Glutamatergic", delay));
+                    }
+                });
+            }
+        });
     }
 
     loop() {
@@ -668,16 +822,48 @@ class TransitionEngine {
     }
 
     update(dt) {
-        // Sensory input varies over time
-        const sensoryInput = Math.sin(performance.now() / 1000) * 10 + 10;
-        const sensoryFires = this.modules[ModuleType.SENSORY].update(dt, sensoryInput);
+        // Use fixed sub-steps for numerical stability of Izhikevich model
+        const subDt = 0.5; // 0.5ms steps
+        const iterations = Math.min(40, Math.ceil(dt / subDt)); // Cap iterations to prevent spiral of death
 
-        // Signal propagation with some normalization
-        const cognitiveInput = (sensoryFires / 64) * 20;
-        const cognitiveFires = this.modules[ModuleType.COGNITIVE].update(dt, cognitiveInput);
+        for (let i = 0; i < iterations; i++) {
+            this.currentTime += subDt;
 
-        const kernelInput = (cognitiveFires / 64) * 20;
-        this.modules[ModuleType.KERNEL].update(dt, kernelInput);
+            // 1. Process Signal Queue
+            while (this.signalQueue.length > 0 && this.signalQueue[0].deliveryTime <= this.currentTime) {
+                const signal = this.signalQueue.shift();
+                signal.targetNeuron.synapticInput += signal.weight;
+            }
+
+            // 2. Update all neurons in all modules
+            for (const type in this.modules) {
+                const module = this.modules[type];
+                let moduleFires = 0;
+
+                module.neurons.forEach(neuron => {
+                    const externalCurrent = (type === ModuleType.SENSORY) ? this.externalSensoryInput : 0;
+                    if (neuron.update(subDt, externalCurrent)) {
+                        moduleFires++;
+                        // Trigger synaptic transmission for all connected synapses
+                        module.synapses.forEach(syn => {
+                            if (syn.from === neuron) {
+                                this.signalQueue.push({
+                                    deliveryTime: this.currentTime + syn.delay,
+                                    targetNeuron: syn.to,
+                                    weight: syn.weight
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // Sort queue by delivery time after a batch of spikes
+                this.signalQueue.sort((a, b) => a.deliveryTime - b.deliveryTime);
+
+                // Update module activity level
+                module.activity = module.activity * 0.99 + (moduleFires / module.neurons.length) * 0.01;
+            }
+        }
 
         this.validateIntegrity();
     }
@@ -746,7 +932,21 @@ class TransitionEngine {
             this.modules[type].render();
         }
         this.renderNetwork();
+        this.updateEfferentUI();
         this.updateUI();
+    }
+
+    updateEfferentUI() {
+        // Efferent Output Layer: Translate motor module activity to UI action
+        const motorActivity = this.modules[ModuleType.MOTOR].activity;
+        const limb = document.getElementById('digital-limb');
+        if (limb) {
+            // Translate activity rate (0-1) to vertical position (10% to 90%)
+            const pos = 90 - (motorActivity * 80);
+            limb.style.top = `${pos}%`;
+            // Add "glow" based on intensity
+            limb.style.boxShadow = `0 0 ${10 + motorActivity * 20}px #00ff41`;
+        }
     }
 
     renderNetwork() {
@@ -759,9 +959,10 @@ class TransitionEngine {
         ctx.fillRect(0, 0, w, h);
 
         const modules = [
-            { type: ModuleType.SENSORY, x: 100 },
-            { type: ModuleType.COGNITIVE, x: 370 },
-            { type: ModuleType.KERNEL, x: 640 }
+            { type: ModuleType.SENSORY, x: 80 },
+            { type: ModuleType.COGNITIVE, x: 270 },
+            { type: ModuleType.KERNEL, x: 470 },
+            { type: ModuleType.MOTOR, x: 660 }
         ];
 
         // Draw axonal bundles (detailed connections)
@@ -863,6 +1064,21 @@ class TransitionEngine {
             integrityBar.style.backgroundColor = this.integrity > 80 ? '#00ff41' : (this.integrity > 50 ? '#ffcc00' : '#ff3300');
         }
 
+        // Update Engineering Metrics
+        const totalNeurons = 86000000000; // Human brain ~86B neurons
+        const activeNeurons = Object.values(this.modules).length * 64;
+        const totalSynapses = activeNeurons * 20; // Assume 20 synapses/neuron in sim
+
+        // FLOPS: Izhikevich needs ~13 floating point operations per 0.5ms step
+        // Full brain: 86B neurons * 2000 steps/s * 13 ops = 2.2 exaFLOPS
+        const simulationGflops = (activeNeurons * 2000 * 13) / 1e9;
+        const estimatedFullBrainEflops = 2.236;
+
+        const scannedDatasetZB = Math.min(1.0, (this.currentTime / 60000)); // Simulates scanning 1ZB over 1 minute
+
+        document.getElementById('metric-dataset').textContent = `${scannedDatasetZB.toFixed(2)} ZB`;
+        document.getElementById('metric-flops').textContent = `${simulationGflops.toFixed(4)} GFLOPS / ${estimatedFullBrainEflops} EFLOPS`;
+
         const logContainer = document.getElementById('log-container');
         if (logContainer && this.history.length > 0) {
             logContainer.innerHTML = '';
@@ -890,7 +1106,7 @@ class TransitionEngine {
     }
 
     transitionStep() {
-        const order = [ModuleType.SENSORY, ModuleType.COGNITIVE, ModuleType.KERNEL];
+        const order = [ModuleType.SENSORY, ModuleType.COGNITIVE, ModuleType.KERNEL, ModuleType.MOTOR];
 
         for (const type of order) {
             const module = this.modules[type];
@@ -925,7 +1141,8 @@ class TransitionEngine {
             this.modules = {
                 [ModuleType.SENSORY]: new TransitionModule(ModuleType.SENSORY),
                 [ModuleType.COGNITIVE]: new TransitionModule(ModuleType.COGNITIVE),
-                [ModuleType.KERNEL]: new TransitionModule(ModuleType.KERNEL)
+                [ModuleType.KERNEL]: new TransitionModule(ModuleType.KERNEL),
+                [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
             };
             this.integrity = 100;
             this.history = ["System reset."];
@@ -990,7 +1207,7 @@ class SimulationDiagnostics {
 
     testInitialState() {
         const modules = Object.values(this.engine.modules);
-        this.assert(modules.length === 3, "Engine should have 3 modules.");
+        this.assert(modules.length === 4, "Engine should have 4 modules.");
         modules.forEach(m => {
             this.assert(m.state === 'Biological', `${m.type} should start as Biological.`);
             this.assert(m.syntheticCount === 0, `${m.type} should have 0 synthetic units.`);
