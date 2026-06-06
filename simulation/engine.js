@@ -19,36 +19,60 @@ class Neuron {
     constructor(id) {
         this.id = id;
         this.state = State.BIOLOGICAL;
-        this.potential = Math.random() * -70; // Membrane potential in mV
-        this.threshold = -50;
-        this.refractoryPeriod = 0;
+
+        // Izhikevich Model Parameters
+        // RS (Regular Spiking): a=0.02, b=0.2, c=-65, d=8
+        // FS (Fast Spiking): a=0.1, b=0.2, c=-65, d=2
+        this.params = {
+            a: 0.02,
+            b: 0.2,
+            c: -65,
+            d: 8
+        };
+
+        this.v = -65; // Membrane potential
+        this.u = this.params.b * this.v; // Recovery variable
         this.isFiring = false;
     }
 
     update(dt, inputSignal = 0) {
-        if (this.refractoryPeriod > 0) {
-            this.refractoryPeriod -= dt;
-            this.isFiring = false;
-            this.potential = -70;
-            return false;
+        // Limit dt and use smaller sub-steps for Izhikevich stability
+        const step = Math.min(dt, 20);
+        const subDt = 0.5;
+        const iterations = Math.ceil(step / subDt);
+
+        let fired = false;
+
+        // Adaptive noise based on state
+        const noise = this.state === State.BIOLOGICAL ? (Math.random() - 0.5) * 10 : (Math.random() - 0.5) * 1;
+        const current = inputSignal + noise + 4; // Base drive
+
+        for (let i = 0; i < iterations; i++) {
+            // Izhikevich equations
+            // v' = 0.04v^2 + 5v + 140 - u + I
+            // u' = a(bv - u)
+
+            // Numerical stability: cap v to prevent runaway quadratic
+            const v = Math.min(this.v, 30);
+            this.v += subDt * (0.04 * v * v + 5 * v + 140 - this.u + current);
+            this.u += subDt * this.params.a * (this.params.b * this.v - this.u);
+
+            if (this.v >= 30) {
+                fired = true;
+                this.v = this.params.c;
+                this.u += this.params.d;
+            }
         }
 
-        const leak = (-70 - this.potential) * 0.05;
-        this.potential += (leak + inputSignal + (Math.random() - 0.5) * 15) * (dt / 10);
-
-        if (this.potential >= this.threshold) {
-            this.fire();
-            return true;
-        } else {
-            this.isFiring = false;
-            return false;
-        }
+        this.isFiring = fired;
+        return fired;
     }
 
-    fire() {
-        this.isFiring = true;
-        this.potential = 30; // Spike
-        this.refractoryPeriod = 40 + Math.random() * 20; // ms refractory
+    setSynthetic() {
+        this.state = State.SYNTHETIC;
+        // Transition to Fast Spiking (FS) for efficiency/precision
+        this.params.a = 0.1;
+        this.params.d = 2;
     }
 }
 
@@ -99,12 +123,17 @@ class TransitionModule {
 
             if (n.isFiring) {
                 ctx.fillStyle = n.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41';
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = 15;
                 ctx.shadowColor = ctx.fillStyle;
-                ctx.fillRect(c * cellW + 2, r * cellH + 2, cellW - 4, cellH - 4);
+                ctx.fillRect(c * cellW + 1, r * cellH + 1, cellW - 2, cellH - 2);
                 ctx.shadowBlur = 0;
             } else {
-                ctx.fillStyle = n.state === State.BIOLOGICAL ? '#332200' : '#003311';
+                ctx.fillStyle = n.state === State.BIOLOGICAL ? '#221100' : '#001a09';
+                ctx.fillRect(c * cellW + 4, r * cellH + 4, cellW - 8, cellH - 8);
+
+                // Potential indicator
+                const p = Math.max(0, Math.min(1, (n.v + 65) / 95));
+                ctx.fillStyle = n.state === State.BIOLOGICAL ? `rgba(255, 204, 0, ${p * 0.3})` : `rgba(0, 255, 65, ${p * 0.3})`;
                 ctx.fillRect(c * cellW + 4, r * cellH + 4, cellW - 8, cellH - 8);
             }
         });
@@ -126,7 +155,7 @@ class TransitionModule {
     transitionNeurons(count) {
         const available = this.neurons.filter(n => n.state === State.BIOLOGICAL);
         for (let i = 0; i < Math.min(count, available.length); i++) {
-            available[i].state = State.SYNTHETIC;
+            available[i].setSynthetic();
         }
         this.updateProgress();
     }
@@ -160,13 +189,15 @@ class TransitionEngine {
     }
 
     update(dt) {
-        const sensoryInput = Math.sin(performance.now() / 500) * 20 + 20;
+        // Sensory input varies over time
+        const sensoryInput = Math.sin(performance.now() / 1000) * 10 + 10;
         const sensoryFires = this.modules[ModuleType.SENSORY].update(dt, sensoryInput);
 
-        const cognitiveInput = sensoryFires * 5;
+        // Signal propagation with some normalization
+        const cognitiveInput = (sensoryFires / 64) * 20;
         const cognitiveFires = this.modules[ModuleType.COGNITIVE].update(dt, cognitiveInput);
 
-        const kernelInput = cognitiveFires * 5;
+        const kernelInput = (cognitiveFires / 64) * 20;
         this.modules[ModuleType.KERNEL].update(dt, kernelInput);
 
         this.validateIntegrity();
@@ -184,35 +215,69 @@ class TransitionEngine {
         let targetIntegrity = 100;
 
         // 1. Signal Stability: Kernel activity must remain within physiological bounds
-        if (kAct < 0.005) targetIntegrity -= 40; // Critical: loss of kernel pulse
-        if (kAct > 0.4) targetIntegrity -= 20;   // Critical: seizure-like activity
+        // Refined bounds for more realistic behavior
+        if (kAct < 0.001) targetIntegrity -= 50;
+        if (kAct > 0.5) targetIntegrity -= 30;
 
         // 2. Functional Coherence: Sensory input should drive Cognitive/Kernel output
-        const coherence = Math.min(1, kAct / (sAct + 0.001));
-        if (coherence < 0.1) targetIntegrity -= 15;
+        const coherence = Math.min(1, kAct / (sAct + 0.01));
+        if (coherence < 0.05) targetIntegrity -= 20;
 
         // 3. Substrate Transition Variance
-        const states = Object.values(this.modules).map(m => m.state);
-        const synthCounts = Object.values(this.modules).map(m => m.syntheticCount);
-        const hasTransitioning = synthCounts.some(c => c > 0 && c < 64);
+        // Integrity drops during transition but recovers as modules synchronize
+        const totalNeurons = 64 * 3;
+        const totalSynthetic = Object.values(this.modules).reduce((sum, m) => sum + m.syntheticCount, 0);
+        const transitionProgress = totalSynthetic / totalNeurons;
 
-        if (hasTransitioning) {
-            targetIntegrity -= 5; // Slight instability during active substitution
-        }
-
-        if (states.includes(State.SYNTHETIC) && states.includes(State.BIOLOGICAL)) {
-            targetIntegrity -= 20; // Critical: high variance between substrate types
+        // Variance penalty: highest when 50% through total transition
+        const variance = 1 - Math.abs(transitionProgress - 0.5) * 2;
+        if (totalSynthetic > 0 && totalSynthetic < totalNeurons) {
+            targetIntegrity -= (variance * 15);
         }
 
         // Smoothly adjust current integrity
-        this.integrity = this.integrity * 0.99 + targetIntegrity * 0.01;
+        this.integrity = this.integrity * 0.98 + targetIntegrity * 0.02;
     }
 
     render() {
         for (const type in this.modules) {
             this.modules[type].render();
         }
-        updateUI();
+        this.updateUI();
+    }
+
+    updateUI() {
+        const integrityBar = document.getElementById('integrity-bar');
+        if (integrityBar) {
+            integrityBar.style.width = `${this.integrity}%`;
+            integrityBar.textContent = `${Math.round(this.integrity)}%`;
+            integrityBar.style.backgroundColor = this.integrity > 80 ? '#00ff41' : (this.integrity > 50 ? '#ffcc00' : '#ff3300');
+        }
+
+        const logContainer = document.getElementById('log-container');
+        if (logContainer && this.history.length > 0) {
+            logContainer.innerHTML = '';
+            this.history.slice(-5).forEach(entry => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                div.textContent = entry;
+                logContainer.appendChild(div);
+            });
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        for (const type in this.modules) {
+            const m = this.modules[type];
+            const el = document.getElementById(`module-${type.toLowerCase().split(' ')[0]}`);
+            if (el) {
+                const stateLabel = el.querySelector('.state-label');
+                stateLabel.textContent = m.state;
+                stateLabel.className = `state-label ${m.state.toLowerCase()}`;
+
+                const progress = el.querySelector('.progress-bar-inner');
+                progress.style.width = `${m.overallProgress}%`;
+            }
+        }
     }
 
     transitionStep() {
@@ -222,12 +287,14 @@ class TransitionEngine {
             const module = this.modules[type];
             if (module.state === State.BIOLOGICAL) {
                 if (module.syntheticCount < module.neurons.length) {
-                    module.transitionNeurons(4);
-                    this.history.push(`Substituting ${module.type} units...`);
+                    const batch = 8;
+                    module.transitionNeurons(batch);
+                    const percent = Math.round((module.syntheticCount / module.neurons.length) * 100);
+                    this.history.push(`Substituting ${module.type}: ${percent}% synthetic.`);
                     return;
                 } else {
                     module.state = State.HYBRID;
-                    this.history.push(`${module.type} reached HYBRID state.`);
+                    this.history.push(`${module.type} synchronization in HYBRID state.`);
                     return;
                 }
             }
@@ -261,40 +328,6 @@ class TransitionEngine {
 }
 
 const engine = new TransitionEngine();
-
-function updateUI() {
-    const integrityBar = document.getElementById('integrity-bar');
-    if (integrityBar) {
-        integrityBar.style.width = `${engine.integrity}%`;
-        integrityBar.textContent = `${Math.round(engine.integrity)}%`;
-        integrityBar.style.backgroundColor = engine.integrity > 80 ? '#00ff41' : (engine.integrity > 50 ? '#ffcc00' : '#ff3300');
-    }
-
-    const logContainer = document.getElementById('log-container');
-    if (logContainer && engine.history.length > 0) {
-        logContainer.innerHTML = '';
-        engine.history.slice(-5).forEach(entry => {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            div.textContent = entry;
-            logContainer.appendChild(div);
-        });
-        logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    for (const type in engine.modules) {
-        const m = engine.modules[type];
-        const el = document.getElementById(`module-${type.toLowerCase().split(' ')[0]}`);
-        if (el) {
-            const stateLabel = el.querySelector('.state-label');
-            stateLabel.textContent = m.state;
-            stateLabel.className = `state-label ${m.state.toLowerCase()}`;
-
-            const progress = el.querySelector('.progress-bar-inner');
-            progress.style.width = `${m.overallProgress}%`;
-        }
-    }
-}
 
 document.getElementById('start-transition').addEventListener('click', () => {
     engine.transitionStep();
