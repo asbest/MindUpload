@@ -48,6 +48,12 @@
         <div class="controls">
             <button id="start-transition">Initiate Transition Step</button>
             <button id="reset-sim">Reset Simulation</button>
+            <button id="run-diagnostics" class="secondary">Run System Diagnostics</button>
+        </div>
+
+        <div id="diagnostic-results" class="diagnostic-panel" style="display: none;">
+            <h3>Diagnostic Results</h3>
+            <div id="diagnostic-log"></div>
         </div>
 
         <div class="logs">
@@ -59,5 +65,24 @@
         </div>
     </div>
     <script src="engine.js"></script>
+    <script src="tester.js"></script>
+    <script>
+        document.getElementById('run-diagnostics').addEventListener('click', async () => {
+            const panel = document.getElementById('diagnostic-results');
+            const log = document.getElementById('diagnostic-log');
+            panel.style.display = 'block';
+            log.innerHTML = 'Running diagnostics...';
+
+            const result = await window.runDiagnostics();
+            if (result.success) {
+                log.innerHTML = '<div class="test-success">PASSED: ' + result.results.length + ' assertions.</div>';
+                result.results.forEach(msg => {
+                    log.innerHTML += '<div class="test-entry">✓ ' + msg + '</div>';
+                });
+            } else {
+                log.innerHTML = '<div class="test-failure">FAILED: ' + result.error + '</div>';
+            }
+        });
+    </script>
 </body>
 </html>

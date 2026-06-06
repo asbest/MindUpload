@@ -141,6 +141,16 @@ button:hover {
     color: #000;
 }
 
+button.secondary {
+    border-color: #00ccff;
+    color: #00ccff;
+}
+
+button.secondary:hover {
+    background-color: #00ccff;
+    color: #000;
+}
+
 button:disabled {
     border-color: #003300;
     color: #003300;
@@ -169,4 +179,35 @@ button:disabled {
     margin-bottom: 5px;
     border-left: 2px solid #008f11;
     padding-left: 8px;
+}
+
+.diagnostic-panel {
+    background-color: #000;
+    padding: 15px;
+    border: 1px solid #00ccff;
+    margin-bottom: 30px;
+}
+
+.diagnostic-panel h3 {
+    margin-top: 0;
+    font-size: 0.9rem;
+    color: #00ccff;
+}
+
+.test-success {
+    color: #00ff41;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.test-failure {
+    color: #ff3300;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.test-entry {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 3px;
 }

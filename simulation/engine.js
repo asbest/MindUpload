@@ -328,6 +328,7 @@ class TransitionEngine {
 }
 
 const engine = new TransitionEngine();
+window.engine = engine;
 
 document.getElementById('start-transition').addEventListener('click', () => {
     engine.transitionStep();
