@@ -54,6 +54,40 @@
             <button id="start-transition">Initiate Transition Step</button>
             <button id="reset-sim">Reset Simulation</button>
             <button id="run-diagnostics" class="secondary">Run System Diagnostics</button>
+            <button id="explain-btn" class="secondary">Explain Framework</button>
+        </div>
+
+        <div id="explanation-panel" class="explanation-panel" style="display: none;">
+            <div class="explanation-content">
+                <h3>Framework: Incremental Substitution</h3>
+                <p>This simulation demonstrates the <strong>Gradual Transition Framework</strong>, a theoretical approach to mind uploading that maintains continuity of consciousness.</p>
+
+                <div class="info-section">
+                    <h4>1. The Neuron Model (Izhikevich)</h4>
+                    <p>Unlike simple models, we use the <strong>Izhikevich Model</strong> to simulate realistic spiking behavior. Biological neurons are modeled as <em>Regular Spiking (RS)</em>, while synthetic neurons are optimized as <em>Fast Spiking (FS)</em>.</p>
+                    <code>v' = 0.04v² + 5v + 140 - u + I</code>
+                </div>
+
+                <div class="info-section">
+                    <h4>2. Modular Substitution</h4>
+                    <p>Substitution occurs in three distinct modules: <strong>Sensory</strong>, <strong>Cognitive</strong>, and <strong>Primary Kernel</strong>. The process follows a strict sequential order to ensure signal stability.</p>
+                </div>
+
+                <div class="info-section">
+                    <h4>3. State Transitions</h4>
+                    <ul>
+                        <li><span class="state-label biological">Biological</span>: 100% organic substrate.</li>
+                        <li><span class="state-label hybrid">Hybrid</span>: Gradual replacement of neurons with synthetic counterparts.</li>
+                        <li><span class="state-label synthetic">Synthetic</span>: Full substrate transition completed.</li>
+                    </ul>
+                </div>
+
+                <div class="info-section">
+                    <h4>4. Continuity Integrity</h4>
+                    <p>Monitors signal coherence, functional synchronization, and substrate variance. Drops in integrity indicate potential disruptions in the "stream of consciousness" during transition.</p>
+                </div>
+                <button id="close-explanation">Close</button>
+            </div>
         </div>
 
         <div id="diagnostic-results" class="diagnostic-panel" style="display: none;">
@@ -87,6 +121,14 @@
             } else {
                 log.innerHTML = '<div class="test-failure">FAILED: ' + result.error + '</div>';
             }
+        });
+
+        document.getElementById('explain-btn').addEventListener('click', () => {
+            document.getElementById('explanation-panel').style.display = 'block';
+        });
+
+        document.getElementById('close-explanation').addEventListener('click', () => {
+            document.getElementById('explanation-panel').style.display = 'none';
         });
     </script>
 </body>
