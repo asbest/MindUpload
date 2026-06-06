@@ -273,8 +273,22 @@ button:disabled {
     display: block;
     background-color: #111;
     padding: 10px;
-    margin: 10px 0;
+    margin: 5px 0;
     color: #ffcc00;
+    border-left: 2px solid #ffcc00;
+}
+
+.variable-defs {
+    margin: 10px 0;
+    font-size: 0.85rem;
+}
+
+.variable-defs p {
+    margin: 2px 0 !important;
+}
+
+.formula-block {
+    margin: 10px 0;
 }
 
 .info-section ul {

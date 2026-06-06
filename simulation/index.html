@@ -64,8 +64,24 @@
 
                 <div class="info-section">
                     <h4>1. The Neuron Model (Izhikevich)</h4>
-                    <p>Unlike simple models, we use the <strong>Izhikevich Model</strong> to simulate realistic spiking behavior. Biological neurons are modeled as <em>Regular Spiking (RS)</em>, while synthetic neurons are optimized as <em>Fast Spiking (FS)</em>.</p>
-                    <code>v' = 0.04v² + 5v + 140 - u + I</code>
+                    <p>We use the <strong>Izhikevich Model</strong> to simulate realistic spiking behavior. It balances the biological plausibility of Hodgkin-Huxley neurons with the computational efficiency of integrate-and-fire models.</p>
+
+                    <div class="formula-block">
+                        <code>v' = 0.04v² + 5v + 140 - u + I</code>
+                        <code>u' = a(bv - u)</code>
+                    </div>
+
+                    <div class="variable-defs">
+                        <p><strong>v</strong>: Membrane potential</p>
+                        <p><strong>u</strong>: Recovery variable (membrane capillary restoration)</p>
+                        <p><strong>a, b, c, d</strong>: Biologically inspired parameters</p>
+                    </div>
+
+                    <p><strong>Reset condition:</strong><br>
+                    If <code>v ≥ 30 mV</code>, then <code>v ← c</code> and <code>u ← u + d</code>.</p>
+
+                    <p><em>Biological (Regular Spiking):</em> a=0.02, b=0.2, c=-65, d=8<br>
+                    <em>Synthetic (Fast Spiking):</em> a=0.1, b=0.2, c=-65, d=2</p>
                 </div>
 
                 <div class="info-section">
