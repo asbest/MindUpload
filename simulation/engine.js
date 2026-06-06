@@ -212,6 +212,7 @@ class TransitionEngine {
             [ModuleType.KERNEL]: new TransitionModule(ModuleType.KERNEL)
         };
         this.integrity = 100;
+        this.activeReasons = new Set();
         this.history = ["System initialized in biological state."];
         this.lastTick = performance.now();
         this.isRunning = true;
@@ -259,27 +260,50 @@ class TransitionEngine {
         const sAct = this.modules[ModuleType.SENSORY].activity;
 
         let targetIntegrity = 100;
+        const currentReasons = new Set();
 
         // 1. Signal Stability: Kernel activity must remain within physiological bounds
-        // Refined bounds for more realistic behavior
-        if (kAct < 0.001) targetIntegrity -= 50;
-        if (kAct > 0.5) targetIntegrity -= 30;
+        if (kAct < 0.001) {
+            targetIntegrity -= 50;
+            currentReasons.add("Critical: Signal loss in Primary Kernel");
+        }
+        if (kAct > 0.5) {
+            targetIntegrity -= 30;
+            currentReasons.add("Warning: Hyper-activity detected in Primary Kernel");
+        }
 
         // 2. Functional Coherence: Sensory input should drive Cognitive/Kernel output
         const coherence = Math.min(1, kAct / (sAct + 0.01));
-        if (coherence < 0.05) targetIntegrity -= 20;
+        if (coherence < 0.05) {
+            targetIntegrity -= 20;
+            currentReasons.add("Warning: Functional decoherence between Sensory and Kernel");
+        }
 
         // 3. Substrate Transition Variance
-        // Integrity drops during transition but recovers as modules synchronize
         const totalNeurons = 64 * 3;
         const totalSynthetic = Object.values(this.modules).reduce((sum, m) => sum + m.syntheticCount, 0);
         const transitionProgress = totalSynthetic / totalNeurons;
-
-        // Variance penalty: highest when 50% through total transition
         const variance = 1 - Math.abs(transitionProgress - 0.5) * 2;
+
         if (totalSynthetic > 0 && totalSynthetic < totalNeurons) {
             targetIntegrity -= (variance * 15);
+            if (variance > 0.2) {
+                currentReasons.add("System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)");
+            }
         }
+
+        // Logging reasons to console when they change
+        currentReasons.forEach(reason => {
+            if (!this.activeReasons.has(reason)) {
+                console.warn(`[Integrity Alert] ${reason}`);
+            }
+        });
+        this.activeReasons.forEach(reason => {
+            if (!currentReasons.has(reason)) {
+                console.info(`[Integrity Restored] ${reason}`);
+            }
+        });
+        this.activeReasons = currentReasons;
 
         // Smoothly adjust current integrity
         this.integrity = this.integrity * 0.98 + targetIntegrity * 0.02;
