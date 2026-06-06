@@ -16,8 +16,10 @@ const ModuleType = {
 };
 
 class Neuron {
-    constructor(id) {
+    constructor(id, x = 0, y = 0) {
         this.id = id;
+        this.x = x;
+        this.y = y;
         this.state = State.BIOLOGICAL;
 
         // Izhikevich Model Parameters
@@ -80,12 +82,42 @@ class TransitionModule {
     constructor(type) {
         this.type = type;
         this.state = State.BIOLOGICAL;
-        this.neurons = Array.from({ length: 64 }, (_, i) => new Neuron(i));
         this.overallProgress = 0;
         this.activity = 0;
 
         this.canvas = document.getElementById(`canvas-${type.toLowerCase().split(' ')[0]}`);
         this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+
+        this.neurons = [];
+        this.synapses = [];
+        this.initNetwork();
+    }
+
+    initNetwork() {
+        const w = this.canvas ? this.canvas.width : 200;
+        const h = this.canvas ? this.canvas.height : 100;
+
+        // Create neurons in a semi-random spatial distribution
+        for (let i = 0; i < 64; i++) {
+            const margin = 10;
+            const x = margin + Math.random() * (w - 2 * margin);
+            const y = margin + Math.random() * (h - 2 * margin);
+            this.neurons.push(new Neuron(i, x, y));
+        }
+
+        // Create synapses between nearby neurons
+        for (let i = 0; i < this.neurons.length; i++) {
+            for (let j = i + 1; j < this.neurons.length; j++) {
+                const n1 = this.neurons[i];
+                const n2 = this.neurons[j];
+                const dist = Math.hypot(n1.x - n2.x, n1.y - n2.y);
+
+                // Connect if within distance, limited number of connections
+                if (dist < 35 && Math.random() < 0.3) {
+                    this.synapses.push({ from: n1, to: n2, weight: Math.random() });
+                }
+            }
+        }
     }
 
     get syntheticCount() {
@@ -109,32 +141,43 @@ class TransitionModule {
         const w = this.canvas.width;
         const h = this.canvas.height;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.fillRect(0, 0, w, h);
 
-        const cols = 8;
-        const rows = 8;
-        const cellW = w / cols;
-        const cellH = h / rows;
+        // Draw synapses
+        ctx.lineWidth = 1;
+        this.synapses.forEach(s => {
+            const firing = s.from.isFiring || s.to.isFiring;
+            if (firing) {
+                ctx.strokeStyle = s.from.state === State.BIOLOGICAL ? 'rgba(255, 204, 0, 0.5)' : 'rgba(0, 255, 65, 0.5)';
+                ctx.lineWidth = 2;
+            } else {
+                ctx.strokeStyle = 'rgba(50, 50, 50, 0.2)';
+                ctx.lineWidth = 1;
+            }
+            ctx.beginPath();
+            ctx.moveTo(s.from.x, s.from.y);
+            ctx.lineTo(s.to.x, s.to.y);
+            ctx.stroke();
+        });
 
-        this.neurons.forEach((n, i) => {
-            const r = Math.floor(i / cols);
-            const c = i % cols;
+        // Draw neurons
+        this.neurons.forEach(n => {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, 3, 0, Math.PI * 2);
 
             if (n.isFiring) {
                 ctx.fillStyle = n.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41';
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = 10;
                 ctx.shadowColor = ctx.fillStyle;
-                ctx.fillRect(c * cellW + 1, r * cellH + 1, cellW - 2, cellH - 2);
+                ctx.fill();
                 ctx.shadowBlur = 0;
             } else {
-                ctx.fillStyle = n.state === State.BIOLOGICAL ? '#221100' : '#001a09';
-                ctx.fillRect(c * cellW + 4, r * cellH + 4, cellW - 8, cellH - 8);
-
-                // Potential indicator
                 const p = Math.max(0, Math.min(1, (n.v + 65) / 95));
-                ctx.fillStyle = n.state === State.BIOLOGICAL ? `rgba(255, 204, 0, ${p * 0.3})` : `rgba(0, 255, 65, ${p * 0.3})`;
-                ctx.fillRect(c * cellW + 4, r * cellH + 4, cellW - 8, cellH - 8);
+                ctx.fillStyle = n.state === State.BIOLOGICAL ?
+                    `rgba(100, 80, 0, ${0.1 + p * 0.4})` :
+                    `rgba(0, 100, 40, ${0.1 + p * 0.4})`;
+                ctx.fill();
             }
         });
     }
@@ -265,37 +308,54 @@ class TransitionEngine {
             { type: ModuleType.KERNEL, x: 640 }
         ];
 
-        // Draw connections
-        ctx.lineWidth = 2;
+        // Draw axonal bundles (detailed connections)
         for (let i = 0; i < modules.length - 1; i++) {
             const m1 = modules[i];
             const m2 = modules[i+1];
             const mod1 = this.modules[m1.type];
 
-            const gradient = ctx.createLinearGradient(m1.x, h/2, m2.x, h/2);
-            gradient.addColorStop(0, mod1.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41');
-            gradient.addColorStop(1, this.modules[m2.type].state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41');
+            const bundleCount = 5;
+            for (let b = 0; b < bundleCount; b++) {
+                const offset = (b - (bundleCount - 1) / 2) * 10;
 
-            ctx.strokeStyle = gradient;
-            ctx.setLineDash([5, 5]);
-            ctx.lineDashOffset = -performance.now() / 50;
+                ctx.beginPath();
+                ctx.moveTo(m1.x + 40, h/2 + offset/2);
+                ctx.bezierCurveTo(
+                    m1.x + 150, h/2 + offset * 2,
+                    m2.x - 150, h/2 - offset * 2,
+                    m2.x - 40, h/2 + offset/2
+                );
 
-            ctx.beginPath();
-            ctx.moveTo(m1.x + 40, h/2);
-            ctx.lineTo(m2.x - 40, h/2);
-            ctx.stroke();
-            ctx.setLineDash([]);
+                const gradient = ctx.createLinearGradient(m1.x, h/2, m2.x, h/2);
+                gradient.addColorStop(0, mod1.state === State.BIOLOGICAL ? 'rgba(255, 204, 0, 0.3)' : 'rgba(0, 255, 65, 0.3)');
+                gradient.addColorStop(1, this.modules[m2.type].state === State.BIOLOGICAL ? 'rgba(255, 204, 0, 0.3)' : 'rgba(0, 255, 65, 0.3)');
 
-            // Signal pulse
-            const pulsePos = (performance.now() / 1000) % 1;
-            const px = m1.x + 40 + (m2.x - m1.x - 80) * pulsePos;
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(px, h/2, 3 * (mod1.activity * 10 + 1), 0, Math.PI * 2);
-            ctx.fill();
+                ctx.strokeStyle = gradient;
+                ctx.setLineDash([10, 15]);
+                ctx.lineDashOffset = -performance.now() / (20 + b * 5);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Occasional signal pulse in bundle
+                if ((performance.now() + b * 200) % 1500 < 500) {
+                    const pulsePos = ((performance.now() + b * 200) % 1500) / 500;
+                    const t = pulsePos;
+                    // Bezier point formula: (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+                    const cx1 = m1.x + 150, cy1 = h/2 + offset * 2;
+                    const cx2 = m2.x - 150, cy2 = h/2 - offset * 2;
+                    const px = Math.pow(1-t, 3)*(m1.x+40) + 3*Math.pow(1-t, 2)*t*cx1 + 3*(1-t)*t*t*cx2 + t*t*t*(m2.x-40);
+                    const py = Math.pow(1-t, 3)*(h/2+offset/2) + 3*Math.pow(1-t, 2)*t*cy1 + 3*(1-t)*t*t*cy2 + t*t*t*(h/2+offset/2);
+
+                    ctx.fillStyle = mod1.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41';
+                    ctx.beginPath();
+                    ctx.arc(px, py, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
         }
 
-        // Draw module nodes
+        // Draw module nodes with internal clusters
         modules.forEach(m => {
             const mod = this.modules[m.type];
             const synthRatio = mod.syntheticCount / 64;
@@ -308,6 +368,23 @@ class TransitionEngine {
             ctx.arc(m.x, h/2, 40, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
+
+            // Draw internal "neuron cluster" dots
+            const clusterSeed = m.x; // Use x as seed for deterministic pseudo-random
+            for (let i = 0; i < 15; i++) {
+                const angle = (i / 15) * Math.PI * 2 + (performance.now() / 2000);
+                const radius = 10 + (Math.sin(i * clusterSeed) * 0.5 + 0.5) * 20;
+                const px = m.x + Math.cos(angle) * radius;
+                const py = h/2 + Math.sin(angle) * radius;
+
+                ctx.fillStyle = mod.state === State.BIOLOGICAL ? 'rgba(255, 204, 0, 0.4)' : 'rgba(0, 255, 65, 0.4)';
+                if (Math.random() < mod.activity) {
+                    ctx.fillStyle = mod.state === State.BIOLOGICAL ? '#ffcc00' : '#00ff41';
+                }
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
             // Progress arc
             ctx.strokeStyle = '#00ff41';

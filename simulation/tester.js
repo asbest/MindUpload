@@ -51,7 +51,7 @@ class SimulationDiagnostics {
         this.engine.reset();
         await new Promise(r => setTimeout(r, 200)); // Wait for reset
 
-        const sensory = this.engine.modules['Sensory'];
+        const sensory = this.engine.modules[ModuleType.SENSORY];
         this.engine.transitionStep();
 
         this.assert(sensory.syntheticCount === 8, "First step should substitute 8 units in Sensory module.");
@@ -61,7 +61,7 @@ class SimulationDiagnostics {
     async testFullModuleTransition() {
         this.engine.reset();
         await new Promise(r => setTimeout(r, 200));
-        const sensory = this.engine.modules['Sensory'];
+        const sensory = this.engine.modules[ModuleType.SENSORY];
 
         // Fully substitute Sensory neurons
         for (let i = 0; i < 8; i++) {
@@ -84,8 +84,8 @@ class SimulationDiagnostics {
 
         // 2. Next step should start Cognitive
         this.engine.transitionStep();
-        this.assert(this.engine.modules['Cognitive'].syntheticCount === 8, "Transition should move to Cognitive after Sensory is Hybrid.");
-        this.assert(this.engine.modules['Primary Kernel'].syntheticCount === 0, "Kernel should not start transition yet.");
+        this.assert(this.engine.modules[ModuleType.COGNITIVE].syntheticCount === 8, "Transition should move to Cognitive after Sensory is Hybrid.");
+        this.assert(this.engine.modules[ModuleType.KERNEL].syntheticCount === 0, "Kernel should not start transition yet.");
     }
 
     async testResetFunctionality() {
@@ -93,7 +93,7 @@ class SimulationDiagnostics {
         this.engine.reset();
 
         await new Promise(r => setTimeout(r, 200));
-        const sensory = this.engine.modules['Sensory'];
+        const sensory = this.engine.modules[ModuleType.SENSORY];
         this.assert(sensory.syntheticCount === 0, "Reset should clear synthetic count.");
         this.assert(sensory.state === 'Biological', "Reset should restore Biological state.");
     }
