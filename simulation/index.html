@@ -974,15 +974,19 @@ class TransitionEngine {
             }
         }
 
-        // Logging reasons to console when they change
+        // Logging reasons to console and UI when they change
         currentReasons.forEach(reason => {
             if (!this.activeReasons.has(reason)) {
-                console.warn(`[Integrity Alert] ${reason}`);
+                const msg = `[Integrity Alert] ${reason}`;
+                console.warn(msg);
+                this.history.push(msg);
             }
         });
         this.activeReasons.forEach(reason => {
             if (!currentReasons.has(reason)) {
-                console.info(`[Integrity Restored] ${reason}`);
+                const msg = `[Integrity Restored] ${reason}`;
+                console.info(msg);
+                this.history.push(msg);
             }
         });
         this.activeReasons = currentReasons;
