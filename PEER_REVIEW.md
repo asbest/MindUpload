@@ -1,6 +1,5 @@
 # Wissenschaftliches Peer-Review: Gradual Transition Framework (GTF)
 
-**Reviewer:** Jules, Senior Scientist (Computational Neuroscience / Neuroinformatik)
 **Datum:** Oktober 2023
 **Gegenstand:** Analyse des "MindUpload" Forschungsansatzes zur inkrementellen Bewusstseinsmigration.
 
