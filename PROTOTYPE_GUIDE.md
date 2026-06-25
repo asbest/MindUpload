@@ -1,35 +1,35 @@
-# Bauanleitung: Hardware-Prototyp zur Inkrementellen Substitution
+# Build Guide: Hardware Prototype for Incremental Substitution
 
-Diese Anleitung beschreibt den Aufbau eines "Minimal Viable Prototypes" (MVP), um das Prinzip der schrittweisen Ersetzung eines biologischen neuronalen Schaltkreises durch ein synthetisches SNN (Spiking Neural Network) zu demonstrieren.
+This guide describes the construction of a "Minimal Viable Prototype" (MVP) to demonstrate the principle of stepwise replacement of a biological neural circuit with a synthetic SNN (Spiking Neural Network).
 
-## Ziel des Prototyps
-Simulation eines einfachen Reflexbogens, bei dem ein biologischer Interneuron-Cluster schrittweise durch einen Mikrocontroller ersetzt wird, der das Izhikevich-Modell in Echtzeit berechnet.
+## Goal of the Prototype
+Simulation of a simple reflex arc, where a biological interneuron cluster is incrementally replaced by a microcontroller calculating the Izhikevich model in real-time.
 
-## Benötigte Hardware-Komponenten
-1.  **Mikrocontroller (MCU):** ESP32 oder ARM Cortex-M4 (z. B. Teensy 4.0) aufgrund der benötigten Fließkomma-Leistung für die Izhikevich-Gleichungen.
-2.  **Analog-Digital-Wandler (ADC):** Zur Erfassung von "biologischen" Signalen (simuliert durch analoge Sensoren).
-3.  **Digital-Analog-Wandler (DAC):** Zur Ausgabe der synthetischen Spikes.
-4.  **Sensoren:** 2x Potentiometer (Simulation von Membranpotenzialen) oder EMG-Sensoren für echte biologische Inputs.
-5.  **Aktuoren:** 1x Servo-Motor (Simulation des Motor-Outputs).
-6.  **Breadboard & Jumper-Kabel.**
+## Required Hardware Components
+1.  **Microcontroller (MCU):** ESP32 or ARM Cortex-M4 (e.g., Teensy 4.0) due to the required floating-point performance for the Izhikevich equations.
+2.  **Analog-to-Digital Converter (ADC):** For capturing "biological" signals (simulated by analog sensors).
+3.  **Digital-to-Analog Converter (DAC):** For outputting synthetic spikes.
+4.  **Sensors:** 2x Potentiometers (simulation of membrane potentials) or EMG sensors for real biological inputs.
+5.  **Actuators:** 1x Servo motor (simulation of motor output).
+6.  **Breadboard & Jumper cables.**
 
 ---
 
-## Schritt 1: Schaltungsaufbau
-1.  Verbinden Sie die analogen Sensoren (Eingangsschicht) mit den ADC-Pins der MCU.
-2.  Der Mikrocontroller fungiert als "Transitional Bridge".
-3.  Der Ausgang (DAC) steuert den Servo-Motor an, der die motorische Reaktion darstellt.
+## Step 1: Circuit Assembly
+1.  Connect the analog sensors (input layer) to the ADC pins of the MCU.
+2.  The microcontroller acts as a "Transitional Bridge."
+3.  The output (DAC) controls the servo motor, representing the motor response.
 
-## Schritt 2: Software-Architektur (Firmware)
-Die Firmware muss drei Modi unterstützen, die per Tastendruck gewechselt werden können:
+## Step 2: Software Architecture (Firmware)
+The firmware must support three modes that can be toggled via button press:
 
-### A. Biologischer Referenzmodus
-Die MCU reicht das Signal des Primärsensors direkt (mit minimaler Filterung) an den Aktuator weiter.
-*   *Code-Logik:* `output = analogRead(sensorPin);`
+### A. Biological Reference Mode
+The MCU passes the primary sensor signal directly (with minimal filtering) to the actuator.
+*   *Code Logic:* `output = analogRead(sensorPin);`
 
-### B. Hybrid-Modus (Transition)
-Die MCU berechnet ein SNN mit Izhikevich-Neuronen. Ein Teil der Neuronen erhält Input vom Sensor, ein anderer Teil "antwortet" synthetisch. Beide Signale werden gewichtet gemittelt.
-*   *Izhikevich-Implementierung:*
+### B. Hybrid Mode (Transition)
+The MCU calculates an SNN with Izhikevich neurons. Some neurons receive input from the sensor, while others "respond" synthetically. Both signals are weighted and averaged.
+*   *Izhikevich Implementation:*
     ```cpp
     v = v + 0.5 * (0.04 * v * v + 5 * v + 140 - u + I);
     u = u + 0.5 * a * (b * v - u);
@@ -40,23 +40,23 @@ Die MCU berechnet ein SNN mit Izhikevich-Neuronen. Ein Teil der Neuronen erhält
     }
     ```
 
-### C. Synthetischer Modus
-Die Steuerung erfolgt zu 100% über das SNN. Der biologische Sensor dient nur noch als "Stimulus-Quelle" für das digitale Modell.
+### C. Synthetic Mode
+Control is handled 100% via the SNN. The biological sensor only serves as a "stimulus source" for the digital model.
 
 ---
 
-## Schritt 3: Validierung der Kontinuität
-Um die wissenschaftliche Strenge sicherzustellen, müssen während des Betriebs folgende Metriken über die serielle Schnittstelle ausgegeben werden:
-1.  **Inter-Spike-Interval (ISI) Varianz:** Vergleich der zeitlichen Abstände zwischen biologischem und synthetischem Modus.
-2.  **Latenz-Messung:** Zeitverzögerung vom Sensor-Input bis zur Servo-Reaktion (Ziel: < 10ms).
-3.  **Synchronisations-Index:** Kreuzkorrelation der Signalverläufe im Hybrid-Modus.
+## Step 3: Continuity Validation
+To ensure scientific rigor, the following metrics must be output via the serial interface during operation:
+1.  **Inter-Spike-Interval (ISI) Variance:** Comparison of the temporal intervals between biological and synthetic modes.
+2.  **Latency Measurement:** Time delay from sensor input to servo reaction (Target: < 10ms).
+3.  **Synchronization Index:** Cross-correlation of signal waveforms in Hybrid Mode.
 
-## Schritt 4: Experimentelle Durchführung
-1.  Starten Sie im **Biologischen Modus** und kalibrieren Sie den Servo-Ausschlag.
-2.  Schalten Sie schrittweise (in 10%-Schritten) die Gewichtung auf das **SNN** um.
-3.  Beobachten Sie, ob der Reflexbogen (Servo-Bewegung) flüssig bleibt oder ob Diskontinuatäten (Ruckeln) auftreten.
+## Step 4: Experimental Procedure
+1.  Start in **Biological Mode** and calibrate the servo deflection.
+2.  Incrementally switch the weighting to the **SNN** (in 10% steps).
+3.  Observe whether the reflex arc (servo movement) remains smooth or if discontinuities (jittering) occur.
 
 ---
 
-## Sicherheitshinweis
-Dieser Prototyp dient ausschließlich Simulationszwecken im Labor. Eine direkte Kopplung mit lebendem Gewebe erfordert medizinisch zertifizierte galvanische Trennung und Ethik-Voten.
+## Safety Note
+This prototype is intended solely for laboratory simulation purposes. Direct coupling with living tissue requires medically certified galvanic isolation and ethical approval.
