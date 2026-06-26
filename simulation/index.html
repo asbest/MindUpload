@@ -265,6 +265,54 @@ button:disabled {
     padding-left: 8px;
 }
 
+    .sideload-dashboard {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 30px;
+        background-color: #000;
+        padding: 15px;
+        border: 1px solid #ff00ff;
+    }
+
+    .stream-box {
+        background-color: #111;
+        border: 1px solid #333;
+        padding: 8px;
+        height: 60px;
+        overflow: hidden;
+        font-size: 0.75rem;
+    }
+
+    .stream-label {
+        color: #ff00ff;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.65rem;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .stream-content {
+        color: #ddd;
+    }
+
+    .hypervisor-panel {
+        background-color: #000;
+        padding: 10px;
+        border: 1px solid #ffcc00;
+        height: 80px;
+        overflow-y: auto;
+        font-size: 0.7rem;
+        margin-bottom: 30px;
+        color: #ffcc00;
+    }
+
+    .hv-entry {
+        border-bottom: 1px solid #222;
+        padding: 2px 0;
+    }
+
 .diagnostic-panel {
     background-color: #000;
     padding: 15px;
@@ -397,11 +445,39 @@ button:disabled {
                 <span class="metric-label">Compute Overhead</span>
                 <span id="metric-flops" class="metric-value">0.00 EFLOPS</span>
             </div>
+            <div class="metric-item">
+                <span class="metric-label">Divergence (ε)</span>
+                <span id="metric-epsilon" class="metric-value">0.000</span>
+            </div>
         </div>
 
         <div class="virtual-env">
             <span class="env-label">Closed-Loop Virtual Environment (Motor Feedback)</span>
             <div id="digital-limb"></div>
+        </div>
+
+        <div class="sideload-dashboard" id="sideload-dashboard" style="display: none;">
+            <div class="stream-box">
+                <span class="stream-label">Dialogue Stream</span>
+                <div id="stream-dialogue" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Thought Stream (CoT)</span>
+                <div id="stream-thought" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Behavioral Stream</span>
+                <div id="stream-behavioral" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Surrounding Env Stream</span>
+                <div id="stream-environment" class="stream-content">...</div>
+            </div>
+        </div>
+
+        <div class="hypervisor-panel" id="hypervisor-panel">
+            <div class="hv-entry">[Boot] Low-level Hardware Abstraction Hypervisor initialized.</div>
+            <div id="hv-logs"></div>
         </div>
 
         <div class="network-overview">
@@ -454,6 +530,7 @@ button:disabled {
 
         <div class="controls">
             <button id="start-transition">Initiate Transition Step</button>
+            <button id="loader-btn" class="secondary" disabled>Enable Cognitive Loader</button>
             <button id="reset-sim">Reset Simulation</button>
             <button id="run-diagnostics" class="secondary">Run System Diagnostics</button>
             <button id="explain-btn" class="secondary">Explain Framework</button>
@@ -509,6 +586,13 @@ button:disabled {
                     <h4>5. Continuity Integrity</h4>
                     <p>Monitors signal coherence, functional synchronization, and substrate variance. Drops in integrity indicate potential disruptions in the "stream of consciousness" during transition.</p>
                 </div>
+
+                <div class="info-section">
+                    <h4>6. Sideloading & Mathematical Formalization</h4>
+                    <p>While this simulation focuses on <strong>Bottom-Up WBE</strong>, the framework also acknowledges <strong>Top-Down Phenotypic Sideloading</strong> (LLM-based reconstruction). Continuity is tracked via the divergence metric ε:</p>
+                    <code>ε = ∫ ||x_bio(t) - x_emu(t)|| dt</code>
+                    <p>Accumulated divergence (ε > 0.1) directly penalizes system integrity, representing the loss of cognitive fidelity.</p>
+                </div>
                 <button id="close-explanation">Close</button>
             </div>
         </div>
@@ -551,6 +635,28 @@ const NeuronType = {
     RS: 'Regular Spiking',
     FS: 'Fast Spiking'
 };
+
+class SideloadManager {
+    constructor() {
+        this.dialogues = ["Identity verification sequence...", "Accessing long-term memory...", "Synchronizing subjective flow...", "Refining linguistic nuances..."];
+        this.thoughts = ["Analyzing substrate variance...", "Evaluating structural deterministic paths...", "Mapping phenotypic footprints...", "Simulating chain of thought..."];
+        this.behaviors = ["Adjusting motor gain...", "Calibrating sensory mapping...", "Executing reflexive logic...", "Monitoring autonomic stability..."];
+        this.envs = ["Scanning virtual environment...", "Updating digital limb coordinates...", "Syncing afferent data streams...", "Processing efferent feedback..."];
+    }
+
+    getRandom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    updateUI() {
+        if (Math.random() > 0.9) {
+            document.getElementById('stream-dialogue').textContent = this.getRandom(this.dialogues);
+            document.getElementById('stream-thought').textContent = this.getRandom(this.thoughts);
+            document.getElementById('stream-behavioral').textContent = this.getRandom(this.behaviors);
+            document.getElementById('stream-environment').textContent = this.getRandom(this.envs);
+        }
+    }
+}
 
 class Synapse {
     constructor(from, to, weight, type, delay) {
@@ -808,6 +914,8 @@ class ConnectomeModule extends TransitionModule {
 class TransitionEngine {
     constructor() {
         this.externalSensoryInput = 0;
+        this.sideloadManager = new SideloadManager();
+        this.isLoaderEnabled = false;
         this.modules = {
             [ModuleType.SENSORY]: new TransitionModule(ModuleType.SENSORY),
             [ModuleType.CONNECTOME]: new ConnectomeModule(ModuleType.CONNECTOME),
@@ -816,6 +924,7 @@ class TransitionEngine {
             [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
         };
         this.integrity = 100;
+        this.epsilon = 0; // Mathematical divergence error as per Paper.md
         this.activeReasons = new Set();
         this.history = ["System initialized in biological state."];
         this.lastTick = performance.now();
@@ -925,11 +1034,47 @@ class TransitionEngine {
                 this.signalQueue.sort((a, b) => a.deliveryTime - b.deliveryTime);
 
                 // Update module activity level
-                module.activity = module.activity * 0.99 + (moduleFires / module.neurons.length) * 0.01;
+                const instantActivity = moduleFires / module.neurons.length;
+                module.activity = module.activity * 0.99 + instantActivity * 0.01;
+
+                // Accumulate epsilon (divergence) during hybrid phase
+                // Simulates ||x_bio - x_emu|| as variance in signal matching
+                if (module.state === State.HYBRID) {
+                    const synthRatio = module.syntheticCount / module.neurons.length;
+                    const divergence = Math.abs(instantActivity - module.activity) * synthRatio;
+                    this.epsilon += divergence * 0.01;
+                }
             }
         }
 
+        if (this.epsilon > 0 || Object.values(this.modules).some(m => m.state !== State.BIOLOGICAL)) {
+            document.getElementById('sideload-dashboard').style.display = 'grid';
+            this.sideloadManager.updateUI();
+        }
+
+        if (Math.random() > 0.98) {
+            this.logHypervisorEvent();
+        }
+
         this.validateIntegrity();
+    }
+
+    logHypervisorEvent() {
+        const logs = [
+            "[HV] SPE context switch executed.",
+            "[HV] Direct hardware access granted (AsbestOS parity).",
+            "[HV] Memory page remapping: SUCCESS.",
+            "[HV] Low-latency interrupt handled.",
+            "[HV] Substrate synchronization locked."
+        ];
+        const logEl = document.getElementById('hv-logs');
+        if (logEl) {
+            const entry = document.createElement('div');
+            entry.className = 'hv-entry';
+            entry.textContent = logs[Math.floor(Math.random() * logs.length)];
+            logEl.prepend(entry);
+            if (logEl.children.length > 5) logEl.lastElementChild.remove();
+        }
     }
 
     validateIntegrity() {
@@ -947,44 +1092,70 @@ class TransitionEngine {
         // 1. Signal Stability: Kernel activity must remain within physiological bounds
         if (kAct < 0.001) {
             targetIntegrity -= 50;
-            currentReasons.add("Critical: Signal loss in Primary Kernel");
+            currentReasons.add("SIGNAL_LOSS");
         }
         if (kAct > 0.5) {
             targetIntegrity -= 30;
-            currentReasons.add("Warning: Hyper-activity detected in Primary Kernel");
+            currentReasons.add("HYPER_ACTIVITY");
         }
 
         // 2. Functional Coherence: Sensory input should drive Cognitive/Kernel output
         const coherence = Math.min(1, kAct / (sAct + 0.01));
         if (coherence < 0.05) {
             targetIntegrity -= 20;
-            currentReasons.add("Warning: Functional decoherence between Sensory and Kernel");
+            currentReasons.add("DECOHERENCE");
         }
 
         // 3. Substrate Transition Variance
-        const totalNeurons = 64 * 3;
+        const totalNeurons = Object.values(this.modules).reduce((sum, m) => sum + m.neurons.length, 0);
         const totalSynthetic = Object.values(this.modules).reduce((sum, m) => sum + m.syntheticCount, 0);
         const transitionProgress = totalSynthetic / totalNeurons;
         const variance = 1 - Math.abs(transitionProgress - 0.5) * 2;
 
         if (totalSynthetic > 0 && totalSynthetic < totalNeurons) {
-            targetIntegrity -= (variance * 15);
+            let reduction = (variance * 15);
+            if (this.isLoaderEnabled) reduction *= 0.2; // Loader reduces transition instability
+            targetIntegrity -= reduction;
             if (variance > 0.2) {
-                currentReasons.add("System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)");
+                currentReasons.add("SUBSTRATE_VARIANCE");
             }
         }
+
+        // 4. Mathematical Divergence (Epsilon)
+        if (this.epsilon > 0.1) {
+            let epsilonPenalty = Math.min(40, this.epsilon * 10);
+            if (this.isLoaderEnabled) epsilonPenalty *= 0.5; // Loader stabilizes divergence
+            targetIntegrity -= epsilonPenalty;
+            if (this.epsilon > 0.5) {
+                currentReasons.add("DIVERGENCE_EXCESS");
+            }
+        }
+
+        // 5. Digital Asbestos Risk (Systemic Risk)
+        if (this.integrity < 40) {
+            currentReasons.add("DIGITAL_ASBESTOS_RISK");
+        }
+
+        const reasonMap = {
+            "SIGNAL_LOSS": "Critical: Signal loss in Primary Kernel",
+            "HYPER_ACTIVITY": "Warning: Hyper-activity detected in Primary Kernel",
+            "DECOHERENCE": "Warning: Functional decoherence between Sensory and Kernel",
+            "SUBSTRATE_VARIANCE": "System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)",
+            "DIVERGENCE_EXCESS": `Critical: Divergence Error (ε = ${this.epsilon.toFixed(3)}) exceeds stability bounds`,
+            "DIGITAL_ASBESTOS_RISK": "Emergency: Digital Asbestos Risk - Systemic instability detected"
+        };
 
         // Logging reasons to console and UI when they change
         currentReasons.forEach(reason => {
             if (!this.activeReasons.has(reason)) {
-                const msg = `[Integrity Alert] ${reason}`;
+                const msg = `[Integrity Alert] ${reasonMap[reason] || reason}`;
                 console.warn(msg);
                 this.history.push(msg);
             }
         });
         this.activeReasons.forEach(reason => {
             if (!currentReasons.has(reason)) {
-                const msg = `[Integrity Restored] ${reason}`;
+                const msg = `[Integrity Restored] ${reasonMap[reason] || reason}`;
                 console.info(msg);
                 this.history.push(msg);
             }
@@ -1134,19 +1305,20 @@ class TransitionEngine {
         }
 
         // Update Engineering Metrics
-        const totalNeurons = 86000000000; // Human brain ~86B neurons
-        const activeNeurons = Object.values(this.modules).length * 64;
+        const realTotalNeurons = 86000000000; // Human brain ~86B neurons
+        const activeNeurons = Object.values(this.modules).reduce((sum, m) => sum + m.neurons.length, 0);
         const totalSynapses = activeNeurons * 20; // Assume 20 synapses/neuron in sim
 
         // FLOPS: Izhikevich needs ~13 floating point operations per 0.5ms step
         // Full brain: 86B neurons * 2000 steps/s * 13 ops = 2.2 exaFLOPS
         const simulationGflops = (activeNeurons * 2000 * 13) / 1e9;
-        const estimatedFullBrainEflops = 2.236;
+        const estimatedFullBrainEflops = (realTotalNeurons * 2000 * 13) / 1e18;
 
         const scannedDatasetZB = Math.min(1.0, (this.currentTime / 60000)); // Simulates scanning 1ZB over 1 minute
 
         document.getElementById('metric-dataset').textContent = `${scannedDatasetZB.toFixed(2)} ZB`;
         document.getElementById('metric-flops').textContent = `${simulationGflops.toFixed(4)} GFLOPS / ${estimatedFullBrainEflops} EFLOPS`;
+        document.getElementById('metric-epsilon').textContent = this.epsilon.toFixed(3);
 
         const logContainer = document.getElementById('log-container');
         if (logContainer && this.history.length > 0) {
@@ -1215,6 +1387,10 @@ class TransitionEngine {
                 [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
             };
             this.integrity = 100;
+            this.epsilon = 0;
+            this.signalQueue = [];
+            this.currentTime = 0;
+            document.getElementById('sideload-dashboard').style.display = 'none';
             this.history = ["System reset."];
             this.isRunning = true;
             this.lastTick = performance.now();
@@ -1228,10 +1404,26 @@ window.engine = engine;
 
 document.getElementById('start-transition').addEventListener('click', () => {
     engine.transitionStep();
+    if (engine.epsilon > 0.1) {
+        document.getElementById('loader-btn').disabled = false;
+    }
+});
+
+document.getElementById('loader-btn').addEventListener('click', () => {
+    engine.isLoaderEnabled = !engine.isLoaderEnabled;
+    const btn = document.getElementById('loader-btn');
+    btn.textContent = engine.isLoaderEnabled ? "Disable Cognitive Loader" : "Enable Cognitive Loader";
+    btn.className = engine.isLoaderEnabled ? "" : "secondary";
+    engine.history.push(engine.isLoaderEnabled ? "Cognitive Loader accelerator engaged." : "Cognitive Loader accelerator disengaged.");
 });
 
 document.getElementById('reset-sim').addEventListener('click', () => {
     engine.reset();
+    document.getElementById('loader-btn').disabled = true;
+    document.getElementById('loader-btn').textContent = "Enable Cognitive Loader";
+    document.getElementById('loader-btn').className = "secondary";
+    document.getElementById('sideload-dashboard').style.display = 'none';
+    document.getElementById('hv-logs').innerHTML = '';
 });
 
 
@@ -1260,6 +1452,14 @@ class SimulationDiagnostics {
             await this.testFullModuleTransition();
             await this.testTransitionOrder();
             await this.testResetFunctionality();
+            await this.testEpsilonAccumulation();
+            await this.testIntegrityDegradation();
+            await this.testCognitiveLoader();
+            await this.testDigitalAsbestosWarning();
+            await this.testSignalPropagation();
+            await this.testSynapticDelay();
+            await this.testSideloadingActivity();
+            await this.testIzhikevichParameters();
 
             console.log("Diagnostics Complete: All tests passed.");
             return { success: true, results: this.results };
@@ -1344,6 +1544,135 @@ class SimulationDiagnostics {
         const sensory = this.engine.modules[ModuleType.SENSORY];
         this.assert(sensory.syntheticCount === 0, "Reset should clear synthetic count.");
         this.assert(sensory.state === 'Biological', "Reset should restore Biological state.");
+    }
+
+    async testEpsilonAccumulation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Move Sensory to HYBRID state
+        for (let i = 0; i < 9; i++) this.engine.transitionStep();
+        this.assert(this.engine.modules[ModuleType.SENSORY].state === State.HYBRID, "Sensory should be in HYBRID state.");
+
+        const initialEpsilon = this.engine.epsilon;
+        // Simulate some activity to trigger epsilon growth
+        this.engine.externalSensoryInput = 50;
+        for (let i = 0; i < 20; i++) this.engine.update(16); // Run several frames
+
+        this.assert(this.engine.epsilon > initialEpsilon, "Epsilon should accumulate during HYBRID phase with activity.");
+        this.engine.externalSensoryInput = 0;
+    }
+
+    async testIntegrityDegradation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Manually spike epsilon
+        this.engine.epsilon = 0.6;
+        // Run update to allow integrity to decay towards target
+        for (let i = 0; i < 100; i++) this.engine.update(16);
+
+        this.assert(this.engine.integrity < 95, "Integrity should drop when Epsilon divergence is high.");
+        this.assert(this.engine.activeReasons.has("DIVERGENCE_EXCESS"), "System should log DIVERGENCE_EXCESS reason.");
+    }
+
+    async testCognitiveLoader() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        this.engine.epsilon = 0.5;
+        this.engine.isLoaderEnabled = true;
+        for (let i = 0; i < 50; i++) this.engine.update(16);
+        const integrityWithLoader = this.engine.integrity;
+
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+        this.engine.epsilon = 0.5;
+        this.engine.isLoaderEnabled = false;
+        for (let i = 0; i < 50; i++) this.engine.update(16);
+        const integrityWithoutLoader = this.engine.integrity;
+
+        this.assert(integrityWithLoader > integrityWithoutLoader, "Cognitive Loader should stabilize integrity compared to non-accelerated state.");
+    }
+
+    async testDigitalAsbestosWarning() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        this.engine.integrity = 30; // Force low integrity
+        this.engine.update(16);
+
+        this.assert(this.engine.activeReasons.has("DIGITAL_ASBESTOS_RISK"), "System should trigger Digital Asbestos Risk warning when integrity is below 40%.");
+    }
+
+    async testSignalPropagation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Inject massive current into Sensory
+        this.engine.externalSensoryInput = 100;
+        this.engine.update(100); // Allow time for signals to propagate
+
+        const connectomeActivity = this.engine.modules[ModuleType.CONNECTOME].activity;
+        this.assert(connectomeActivity > 0, "Sensory spikes should propagate to the Connectome module.");
+        this.engine.externalSensoryInput = 0;
+    }
+
+    async testSynapticDelay() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        const wasRunning = this.engine.isRunning;
+        this.engine.isRunning = false;
+
+        const targetNeuron = this.engine.modules[ModuleType.CONNECTOME].neurons[0];
+        const delay = 10;
+        const weight = 50;
+        const mySignal = {
+            deliveryTime: this.engine.currentTime + delay,
+            targetNeuron: targetNeuron,
+            weight: weight
+        };
+
+        this.engine.signalQueue.push(mySignal);
+        this.engine.signalQueue.sort((a, b) => a.deliveryTime - b.deliveryTime);
+
+        this.engine.update(delay / 2);
+        this.assert(this.engine.signalQueue.includes(mySignal), "Signal should remain in queue before delay.");
+
+        this.engine.update(delay);
+        this.assert(!this.engine.signalQueue.includes(mySignal), "Signal should be removed from queue after delay.");
+
+        this.engine.isRunning = wasRunning;
+        if (wasRunning) this.engine.loop();
+    }
+
+    async testSideloadingActivity() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Dashboard should be hidden initially
+        this.assert(document.getElementById('sideload-dashboard').style.display === 'none', "Sideload dashboard should be hidden initially.");
+
+        // Move to hybrid state
+        for (let i = 0; i < 9; i++) this.engine.transitionStep();
+        this.engine.update(16);
+
+        this.assert(document.getElementById('sideload-dashboard').style.display === 'grid', "Sideload dashboard should become visible during transition.");
+    }
+
+    async testIzhikevichParameters() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        const neuron = this.engine.modules[ModuleType.SENSORY].neurons[0];
+        this.assert(neuron.type === NeuronType.RS || neuron.type === NeuronType.FS, "Neuron should have a valid initial type.");
+        const initialA = neuron.params.a;
+
+        neuron.setSynthetic();
+        this.assert(neuron.state === State.SYNTHETIC, "Neuron state should change to SYNTHETIC.");
+        this.assert(neuron.type === NeuronType.FS, "Synthetic neurons should use Fast Spiking parameters.");
+        this.assert(neuron.params.a === 0.1, "Izhikevich parameter 'a' should be 0.1 for synthetic neurons.");
     }
 }
 
