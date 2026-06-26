@@ -265,6 +265,54 @@ button:disabled {
     padding-left: 8px;
 }
 
+    .sideload-dashboard {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 30px;
+        background-color: #000;
+        padding: 15px;
+        border: 1px solid #ff00ff;
+    }
+
+    .stream-box {
+        background-color: #111;
+        border: 1px solid #333;
+        padding: 8px;
+        height: 60px;
+        overflow: hidden;
+        font-size: 0.75rem;
+    }
+
+    .stream-label {
+        color: #ff00ff;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.65rem;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .stream-content {
+        color: #ddd;
+    }
+
+    .hypervisor-panel {
+        background-color: #000;
+        padding: 10px;
+        border: 1px solid #ffcc00;
+        height: 80px;
+        overflow-y: auto;
+        font-size: 0.7rem;
+        margin-bottom: 30px;
+        color: #ffcc00;
+    }
+
+    .hv-entry {
+        border-bottom: 1px solid #222;
+        padding: 2px 0;
+    }
+
 .diagnostic-panel {
     background-color: #000;
     padding: 15px;
@@ -397,11 +445,39 @@ button:disabled {
                 <span class="metric-label">Compute Overhead</span>
                 <span id="metric-flops" class="metric-value">0.00 EFLOPS</span>
             </div>
+            <div class="metric-item">
+                <span class="metric-label">Divergence (ε)</span>
+                <span id="metric-epsilon" class="metric-value">0.000</span>
+            </div>
         </div>
 
         <div class="virtual-env">
             <span class="env-label">Closed-Loop Virtual Environment (Motor Feedback)</span>
             <div id="digital-limb"></div>
+        </div>
+
+        <div class="sideload-dashboard" id="sideload-dashboard" style="display: none;">
+            <div class="stream-box">
+                <span class="stream-label">Dialogue Stream</span>
+                <div id="stream-dialogue" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Thought Stream (CoT)</span>
+                <div id="stream-thought" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Behavioral Stream</span>
+                <div id="stream-behavioral" class="stream-content">...</div>
+            </div>
+            <div class="stream-box">
+                <span class="stream-label">Surrounding Env Stream</span>
+                <div id="stream-environment" class="stream-content">...</div>
+            </div>
+        </div>
+
+        <div class="hypervisor-panel" id="hypervisor-panel">
+            <div class="hv-entry">[Boot] Low-level Hardware Abstraction Hypervisor initialized.</div>
+            <div id="hv-logs"></div>
         </div>
 
         <div class="network-overview">
@@ -454,6 +530,7 @@ button:disabled {
 
         <div class="controls">
             <button id="start-transition">Initiate Transition Step</button>
+            <button id="loader-btn" class="secondary" disabled>Enable Cognitive Loader</button>
             <button id="reset-sim">Reset Simulation</button>
             <button id="run-diagnostics" class="secondary">Run System Diagnostics</button>
             <button id="explain-btn" class="secondary">Explain Framework</button>
@@ -558,6 +635,28 @@ const NeuronType = {
     RS: 'Regular Spiking',
     FS: 'Fast Spiking'
 };
+
+class SideloadManager {
+    constructor() {
+        this.dialogues = ["Identity verification sequence...", "Accessing long-term memory...", "Synchronizing subjective flow...", "Refining linguistic nuances..."];
+        this.thoughts = ["Analyzing substrate variance...", "Evaluating structural deterministic paths...", "Mapping phenotypic footprints...", "Simulating chain of thought..."];
+        this.behaviors = ["Adjusting motor gain...", "Calibrating sensory mapping...", "Executing reflexive logic...", "Monitoring autonomic stability..."];
+        this.envs = ["Scanning virtual environment...", "Updating digital limb coordinates...", "Syncing afferent data streams...", "Processing efferent feedback..."];
+    }
+
+    getRandom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    updateUI() {
+        if (Math.random() > 0.9) {
+            document.getElementById('stream-dialogue').textContent = this.getRandom(this.dialogues);
+            document.getElementById('stream-thought').textContent = this.getRandom(this.thoughts);
+            document.getElementById('stream-behavioral').textContent = this.getRandom(this.behaviors);
+            document.getElementById('stream-environment').textContent = this.getRandom(this.envs);
+        }
+    }
+}
 
 class Synapse {
     constructor(from, to, weight, type, delay) {
@@ -815,6 +914,8 @@ class ConnectomeModule extends TransitionModule {
 class TransitionEngine {
     constructor() {
         this.externalSensoryInput = 0;
+        this.sideloadManager = new SideloadManager();
+        this.isLoaderEnabled = false;
         this.modules = {
             [ModuleType.SENSORY]: new TransitionModule(ModuleType.SENSORY),
             [ModuleType.CONNECTOME]: new ConnectomeModule(ModuleType.CONNECTOME),
@@ -946,7 +1047,34 @@ class TransitionEngine {
             }
         }
 
+        if (this.epsilon > 0 || Object.values(this.modules).some(m => m.state !== State.BIOLOGICAL)) {
+            document.getElementById('sideload-dashboard').style.display = 'grid';
+            this.sideloadManager.updateUI();
+        }
+
+        if (Math.random() > 0.98) {
+            this.logHypervisorEvent();
+        }
+
         this.validateIntegrity();
+    }
+
+    logHypervisorEvent() {
+        const logs = [
+            "[HV] SPE context switch executed.",
+            "[HV] Direct hardware access granted (AsbestOS parity).",
+            "[HV] Memory page remapping: SUCCESS.",
+            "[HV] Low-latency interrupt handled.",
+            "[HV] Substrate synchronization locked."
+        ];
+        const logEl = document.getElementById('hv-logs');
+        if (logEl) {
+            const entry = document.createElement('div');
+            entry.className = 'hv-entry';
+            entry.textContent = logs[Math.floor(Math.random() * logs.length)];
+            logEl.prepend(entry);
+            if (logEl.children.length > 5) logEl.lastElementChild.remove();
+        }
     }
 
     validateIntegrity() {
@@ -964,18 +1092,18 @@ class TransitionEngine {
         // 1. Signal Stability: Kernel activity must remain within physiological bounds
         if (kAct < 0.001) {
             targetIntegrity -= 50;
-            currentReasons.add("Critical: Signal loss in Primary Kernel");
+            currentReasons.add("SIGNAL_LOSS");
         }
         if (kAct > 0.5) {
             targetIntegrity -= 30;
-            currentReasons.add("Warning: Hyper-activity detected in Primary Kernel");
+            currentReasons.add("HYPER_ACTIVITY");
         }
 
         // 2. Functional Coherence: Sensory input should drive Cognitive/Kernel output
         const coherence = Math.min(1, kAct / (sAct + 0.01));
         if (coherence < 0.05) {
             targetIntegrity -= 20;
-            currentReasons.add("Warning: Functional decoherence between Sensory and Kernel");
+            currentReasons.add("DECOHERENCE");
         }
 
         // 3. Substrate Transition Variance
@@ -985,32 +1113,49 @@ class TransitionEngine {
         const variance = 1 - Math.abs(transitionProgress - 0.5) * 2;
 
         if (totalSynthetic > 0 && totalSynthetic < totalNeurons) {
-            targetIntegrity -= (variance * 15);
+            let reduction = (variance * 15);
+            if (this.isLoaderEnabled) reduction *= 0.2; // Loader reduces transition instability
+            targetIntegrity -= reduction;
             if (variance > 0.2) {
-                currentReasons.add("System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)");
+                currentReasons.add("SUBSTRATE_VARIANCE");
             }
         }
 
         // 4. Mathematical Divergence (Epsilon)
         if (this.epsilon > 0.1) {
-            const epsilonPenalty = Math.min(40, this.epsilon * 10);
+            let epsilonPenalty = Math.min(40, this.epsilon * 10);
+            if (this.isLoaderEnabled) epsilonPenalty *= 0.5; // Loader stabilizes divergence
             targetIntegrity -= epsilonPenalty;
             if (this.epsilon > 0.5) {
-                currentReasons.add(`Critical: Divergence Error (ε = ${this.epsilon.toFixed(3)}) exceeds stability bounds`);
+                currentReasons.add("DIVERGENCE_EXCESS");
             }
         }
+
+        // 5. Digital Asbestos Risk (Systemic Risk)
+        if (this.integrity < 40) {
+            currentReasons.add("DIGITAL_ASBESTOS_RISK");
+        }
+
+        const reasonMap = {
+            "SIGNAL_LOSS": "Critical: Signal loss in Primary Kernel",
+            "HYPER_ACTIVITY": "Warning: Hyper-activity detected in Primary Kernel",
+            "DECOHERENCE": "Warning: Functional decoherence between Sensory and Kernel",
+            "SUBSTRATE_VARIANCE": "System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)",
+            "DIVERGENCE_EXCESS": `Critical: Divergence Error (ε = ${this.epsilon.toFixed(3)}) exceeds stability bounds`,
+            "DIGITAL_ASBESTOS_RISK": "Emergency: Digital Asbestos Risk - Systemic instability detected"
+        };
 
         // Logging reasons to console and UI when they change
         currentReasons.forEach(reason => {
             if (!this.activeReasons.has(reason)) {
-                const msg = `[Integrity Alert] ${reason}`;
+                const msg = `[Integrity Alert] ${reasonMap[reason] || reason}`;
                 console.warn(msg);
                 this.history.push(msg);
             }
         });
         this.activeReasons.forEach(reason => {
             if (!currentReasons.has(reason)) {
-                const msg = `[Integrity Restored] ${reason}`;
+                const msg = `[Integrity Restored] ${reasonMap[reason] || reason}`;
                 console.info(msg);
                 this.history.push(msg);
             }
@@ -1173,6 +1318,7 @@ class TransitionEngine {
 
         document.getElementById('metric-dataset').textContent = `${scannedDatasetZB.toFixed(2)} ZB`;
         document.getElementById('metric-flops').textContent = `${simulationGflops.toFixed(4)} GFLOPS / ${estimatedFullBrainEflops} EFLOPS`;
+        document.getElementById('metric-epsilon').textContent = this.epsilon.toFixed(3);
 
         const logContainer = document.getElementById('log-container');
         if (logContainer && this.history.length > 0) {
@@ -1255,10 +1401,26 @@ window.engine = engine;
 
 document.getElementById('start-transition').addEventListener('click', () => {
     engine.transitionStep();
+    if (engine.epsilon > 0.1) {
+        document.getElementById('loader-btn').disabled = false;
+    }
+});
+
+document.getElementById('loader-btn').addEventListener('click', () => {
+    engine.isLoaderEnabled = !engine.isLoaderEnabled;
+    const btn = document.getElementById('loader-btn');
+    btn.textContent = engine.isLoaderEnabled ? "Disable Cognitive Loader" : "Enable Cognitive Loader";
+    btn.className = engine.isLoaderEnabled ? "" : "secondary";
+    engine.history.push(engine.isLoaderEnabled ? "Cognitive Loader accelerator engaged." : "Cognitive Loader accelerator disengaged.");
 });
 
 document.getElementById('reset-sim').addEventListener('click', () => {
     engine.reset();
+    document.getElementById('loader-btn').disabled = true;
+    document.getElementById('loader-btn').textContent = "Enable Cognitive Loader";
+    document.getElementById('loader-btn').className = "secondary";
+    document.getElementById('sideload-dashboard').style.display = 'none';
+    document.getElementById('hv-logs').innerHTML = '';
 });
 
 
