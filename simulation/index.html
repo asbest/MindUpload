@@ -1388,6 +1388,9 @@ class TransitionEngine {
             };
             this.integrity = 100;
             this.epsilon = 0;
+            this.signalQueue = [];
+            this.currentTime = 0;
+            document.getElementById('sideload-dashboard').style.display = 'none';
             this.history = ["System reset."];
             this.isRunning = true;
             this.lastTick = performance.now();
@@ -1449,6 +1452,14 @@ class SimulationDiagnostics {
             await this.testFullModuleTransition();
             await this.testTransitionOrder();
             await this.testResetFunctionality();
+            await this.testEpsilonAccumulation();
+            await this.testIntegrityDegradation();
+            await this.testCognitiveLoader();
+            await this.testDigitalAsbestosWarning();
+            await this.testSignalPropagation();
+            await this.testSynapticDelay();
+            await this.testSideloadingActivity();
+            await this.testIzhikevichParameters();
 
             console.log("Diagnostics Complete: All tests passed.");
             return { success: true, results: this.results };
@@ -1533,6 +1544,135 @@ class SimulationDiagnostics {
         const sensory = this.engine.modules[ModuleType.SENSORY];
         this.assert(sensory.syntheticCount === 0, "Reset should clear synthetic count.");
         this.assert(sensory.state === 'Biological', "Reset should restore Biological state.");
+    }
+
+    async testEpsilonAccumulation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Move Sensory to HYBRID state
+        for (let i = 0; i < 9; i++) this.engine.transitionStep();
+        this.assert(this.engine.modules[ModuleType.SENSORY].state === State.HYBRID, "Sensory should be in HYBRID state.");
+
+        const initialEpsilon = this.engine.epsilon;
+        // Simulate some activity to trigger epsilon growth
+        this.engine.externalSensoryInput = 50;
+        for (let i = 0; i < 20; i++) this.engine.update(16); // Run several frames
+
+        this.assert(this.engine.epsilon > initialEpsilon, "Epsilon should accumulate during HYBRID phase with activity.");
+        this.engine.externalSensoryInput = 0;
+    }
+
+    async testIntegrityDegradation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Manually spike epsilon
+        this.engine.epsilon = 0.6;
+        // Run update to allow integrity to decay towards target
+        for (let i = 0; i < 100; i++) this.engine.update(16);
+
+        this.assert(this.engine.integrity < 95, "Integrity should drop when Epsilon divergence is high.");
+        this.assert(this.engine.activeReasons.has("DIVERGENCE_EXCESS"), "System should log DIVERGENCE_EXCESS reason.");
+    }
+
+    async testCognitiveLoader() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        this.engine.epsilon = 0.5;
+        this.engine.isLoaderEnabled = true;
+        for (let i = 0; i < 50; i++) this.engine.update(16);
+        const integrityWithLoader = this.engine.integrity;
+
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+        this.engine.epsilon = 0.5;
+        this.engine.isLoaderEnabled = false;
+        for (let i = 0; i < 50; i++) this.engine.update(16);
+        const integrityWithoutLoader = this.engine.integrity;
+
+        this.assert(integrityWithLoader > integrityWithoutLoader, "Cognitive Loader should stabilize integrity compared to non-accelerated state.");
+    }
+
+    async testDigitalAsbestosWarning() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        this.engine.integrity = 30; // Force low integrity
+        this.engine.update(16);
+
+        this.assert(this.engine.activeReasons.has("DIGITAL_ASBESTOS_RISK"), "System should trigger Digital Asbestos Risk warning when integrity is below 40%.");
+    }
+
+    async testSignalPropagation() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Inject massive current into Sensory
+        this.engine.externalSensoryInput = 100;
+        this.engine.update(100); // Allow time for signals to propagate
+
+        const connectomeActivity = this.engine.modules[ModuleType.CONNECTOME].activity;
+        this.assert(connectomeActivity > 0, "Sensory spikes should propagate to the Connectome module.");
+        this.engine.externalSensoryInput = 0;
+    }
+
+    async testSynapticDelay() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        const wasRunning = this.engine.isRunning;
+        this.engine.isRunning = false;
+
+        const targetNeuron = this.engine.modules[ModuleType.CONNECTOME].neurons[0];
+        const delay = 10;
+        const weight = 50;
+        const mySignal = {
+            deliveryTime: this.engine.currentTime + delay,
+            targetNeuron: targetNeuron,
+            weight: weight
+        };
+
+        this.engine.signalQueue.push(mySignal);
+        this.engine.signalQueue.sort((a, b) => a.deliveryTime - b.deliveryTime);
+
+        this.engine.update(delay / 2);
+        this.assert(this.engine.signalQueue.includes(mySignal), "Signal should remain in queue before delay.");
+
+        this.engine.update(delay);
+        this.assert(!this.engine.signalQueue.includes(mySignal), "Signal should be removed from queue after delay.");
+
+        this.engine.isRunning = wasRunning;
+        if (wasRunning) this.engine.loop();
+    }
+
+    async testSideloadingActivity() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Dashboard should be hidden initially
+        this.assert(document.getElementById('sideload-dashboard').style.display === 'none', "Sideload dashboard should be hidden initially.");
+
+        // Move to hybrid state
+        for (let i = 0; i < 9; i++) this.engine.transitionStep();
+        this.engine.update(16);
+
+        this.assert(document.getElementById('sideload-dashboard').style.display === 'grid', "Sideload dashboard should become visible during transition.");
+    }
+
+    async testIzhikevichParameters() {
+        this.engine.reset();
+        await new Promise(r => setTimeout(r, 200));
+
+        const neuron = this.engine.modules[ModuleType.SENSORY].neurons[0];
+        this.assert(neuron.type === NeuronType.RS || neuron.type === NeuronType.FS, "Neuron should have a valid initial type.");
+        const initialA = neuron.params.a;
+
+        neuron.setSynthetic();
+        this.assert(neuron.state === State.SYNTHETIC, "Neuron state should change to SYNTHETIC.");
+        this.assert(neuron.type === NeuronType.FS, "Synthetic neurons should use Fast Spiking parameters.");
+        this.assert(neuron.params.a === 0.1, "Izhikevich parameter 'a' should be 0.1 for synthetic neurons.");
     }
 }
 
