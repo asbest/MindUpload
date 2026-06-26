@@ -509,6 +509,13 @@ button:disabled {
                     <h4>5. Continuity Integrity</h4>
                     <p>Monitors signal coherence, functional synchronization, and substrate variance. Drops in integrity indicate potential disruptions in the "stream of consciousness" during transition.</p>
                 </div>
+
+                <div class="info-section">
+                    <h4>6. Sideloading & Mathematical Formalization</h4>
+                    <p>While this simulation focuses on <strong>Bottom-Up WBE</strong>, the framework also acknowledges <strong>Top-Down Phenotypic Sideloading</strong> (LLM-based reconstruction). Continuity is tracked via the divergence metric ε:</p>
+                    <code>ε = ∫ ||x_bio(t) - x_emu(t)|| dt</code>
+                    <p>Accumulated divergence (ε > 0.1) directly penalizes system integrity, representing the loss of cognitive fidelity.</p>
+                </div>
                 <button id="close-explanation">Close</button>
             </div>
         </div>
@@ -816,6 +823,7 @@ class TransitionEngine {
             [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
         };
         this.integrity = 100;
+        this.epsilon = 0; // Mathematical divergence error as per Paper.md
         this.activeReasons = new Set();
         this.history = ["System initialized in biological state."];
         this.lastTick = performance.now();
@@ -925,7 +933,16 @@ class TransitionEngine {
                 this.signalQueue.sort((a, b) => a.deliveryTime - b.deliveryTime);
 
                 // Update module activity level
-                module.activity = module.activity * 0.99 + (moduleFires / module.neurons.length) * 0.01;
+                const instantActivity = moduleFires / module.neurons.length;
+                module.activity = module.activity * 0.99 + instantActivity * 0.01;
+
+                // Accumulate epsilon (divergence) during hybrid phase
+                // Simulates ||x_bio - x_emu|| as variance in signal matching
+                if (module.state === State.HYBRID) {
+                    const synthRatio = module.syntheticCount / module.neurons.length;
+                    const divergence = Math.abs(instantActivity - module.activity) * synthRatio;
+                    this.epsilon += divergence * 0.01;
+                }
             }
         }
 
@@ -962,7 +979,7 @@ class TransitionEngine {
         }
 
         // 3. Substrate Transition Variance
-        const totalNeurons = 64 * 3;
+        const totalNeurons = Object.values(this.modules).reduce((sum, m) => sum + m.neurons.length, 0);
         const totalSynthetic = Object.values(this.modules).reduce((sum, m) => sum + m.syntheticCount, 0);
         const transitionProgress = totalSynthetic / totalNeurons;
         const variance = 1 - Math.abs(transitionProgress - 0.5) * 2;
@@ -971,6 +988,15 @@ class TransitionEngine {
             targetIntegrity -= (variance * 15);
             if (variance > 0.2) {
                 currentReasons.add("System: Substrate Transition Variance (Mixed Bio-Synthetic Signaling)");
+            }
+        }
+
+        // 4. Mathematical Divergence (Epsilon)
+        if (this.epsilon > 0.1) {
+            const epsilonPenalty = Math.min(40, this.epsilon * 10);
+            targetIntegrity -= epsilonPenalty;
+            if (this.epsilon > 0.5) {
+                currentReasons.add(`Critical: Divergence Error (ε = ${this.epsilon.toFixed(3)}) exceeds stability bounds`);
             }
         }
 
@@ -1134,14 +1160,14 @@ class TransitionEngine {
         }
 
         // Update Engineering Metrics
-        const totalNeurons = 86000000000; // Human brain ~86B neurons
-        const activeNeurons = Object.values(this.modules).length * 64;
+        const realTotalNeurons = 86000000000; // Human brain ~86B neurons
+        const activeNeurons = Object.values(this.modules).reduce((sum, m) => sum + m.neurons.length, 0);
         const totalSynapses = activeNeurons * 20; // Assume 20 synapses/neuron in sim
 
         // FLOPS: Izhikevich needs ~13 floating point operations per 0.5ms step
         // Full brain: 86B neurons * 2000 steps/s * 13 ops = 2.2 exaFLOPS
         const simulationGflops = (activeNeurons * 2000 * 13) / 1e9;
-        const estimatedFullBrainEflops = 2.236;
+        const estimatedFullBrainEflops = (realTotalNeurons * 2000 * 13) / 1e18;
 
         const scannedDatasetZB = Math.min(1.0, (this.currentTime / 60000)); // Simulates scanning 1ZB over 1 minute
 
@@ -1215,6 +1241,7 @@ class TransitionEngine {
                 [ModuleType.MOTOR]: new TransitionModule(ModuleType.MOTOR)
             };
             this.integrity = 100;
+            this.epsilon = 0;
             this.history = ["System reset."];
             this.isRunning = true;
             this.lastTick = performance.now();
